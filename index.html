@@ -1,0 +1,1454 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tes Seleksi Olimpiade IPS SMP Muhammadiyah 9 Jakarta</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            blue: '#13378b',
+                            blueHover: '#0f2b6e',
+                            orange: '#f06400',
+                            orangeHover: '#d95a00'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f4f6f9;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            height: 6px;
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        const SUPABASE_URL = 'https://xttdscfvldwrznmemlzl.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_cH5t6-wU6qCKkvuqnWQeKw_-fGFITUT';
+        const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    </script>
+</head>
+<body class="min-h-screen flex flex-col text-gray-800 antialiased selection:bg-blue-100 selection:text-brand-blue">
+    <div id="app-container" class="min-h-screen flex flex-col">
+        <!-- Content dynamically rendered by JS -->
+    </div>
+
+    <!-- Overview Modal -->
+    <div id="overview-modal" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-3xl max-w-xl w-full shadow-2xl overflow-hidden border border-gray-100">
+            <div class="bg-brand-blue text-white px-6 py-4 flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-list-check text-orange-400"></i>
+                    <h3 class="font-bold text-sm sm:text-base">Ringkasan Pengerjaan Soal</h3>
+                </div>
+                <button onclick="toggleModal(false)" class="text-white/80 hover:text-white w-8 h-8 rounded-full bg-white/10 flex items-center justify-center transition">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="p-6 space-y-6 max-h-[75vh] overflow-y-auto custom-scrollbar">
+                <div class="grid grid-cols-2 gap-4 text-center">
+                    <div class="bg-blue-50/80 p-4 rounded-2xl border border-blue-100">
+                        <span class="text-2xl font-extrabold text-brand-blue block" id="modal-answered-count">0</span>
+                        <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Terjawab</span>
+                    </div>
+                    <div class="bg-amber-50/80 p-4 rounded-2xl border border-amber-100">
+                        <span class="text-2xl font-extrabold text-amber-600 block" id="modal-skipped-count">0</span>
+                        <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Belum Diisi</span>
+                    </div>
+                </div>
+
+                <div class="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
+                    <div id="modal-progress-bar" class="bg-brand-orange h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                </div>
+
+                <div id="modal-warning-banner" class="bg-red-50 border border-red-200 rounded-xl p-3.5 flex items-start space-x-3 text-xs text-red-800 hidden">
+                    <i class="fa-solid fa-triangle-exclamation text-red-500 text-sm mt-0.5 shrink-0"></i>
+                    <span><strong>Tidak Dapat Dikumpulkan:</strong> Kamu wajib menjawab seluruh soal (20 soal) terlebih dahulu sebelum dapat mengumpulkan tes ini.</span>
+                </div>
+
+                <div>
+                    <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Nomor Soal (1 - 20)</h4>
+                    <div id="modal-grid" class="grid grid-cols-5 sm:grid-cols-10 gap-2"></div>
+                </div>
+            </div>
+
+            <div class="bg-gray-50 px-6 py-4 border-t border-gray-100 flex items-center justify-end space-x-3">
+                <button onclick="toggleModal(false)" class="px-5 py-2.5 rounded-xl border border-gray-300 text-xs font-bold text-gray-700 hover:bg-gray-100 transition">
+                    Kembali Ke Soal
+                </button>
+                <button id="modal-submit-btn" onclick="submitQuiz(false)" class="px-6 py-2.5 bg-brand-orange hover:bg-brand-orangeHover text-white text-xs font-bold rounded-xl shadow-md transition">
+                    Ya, Kumpulkan Sekarang
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const DURASI = 60 * 60;
+        const STORAGE_KEY = "tes_seleksi_olimpiade_ips_v3";
+        const LETTERS = ['A', 'B', 'C', 'D', 'E'];
+
+        const KELAS = [
+            { tingkat: 7, nama: ['Al Khawarizmi', 'Al Farabi', 'Al Battani', 'Al Biruni', 'Al Jazari', 'Al Kindi', 'Al Zahrawi'] },
+            { tingkat: 8, nama: ['Imam Ahmad', 'Imam Muslim', 'Imam Bukhori', 'Imam Tirmidzi', 'Imam Ghazali', 'Imam Nawawi', 'Imam Nasa’i'] },
+            { tingkat: 9, nama: ['Ibnu Hayyan', 'Ibnu Khaldun', 'Ibnu Sina', 'Ibnu Rushd', 'Ibnu Batuta'] }
+        ];
+
+        const BENTUK = {
+            pg: 'Pilihan Ganda',
+            pilih: 'Pilihan Ganda (Pilih Semua yang Benar)',
+            klasifikasi: 'Klasifikasi A / P / T',
+            bstd: 'Benar / Salah / Tidak Dapat Disimpulkan',
+            sebab: 'Sebab-Akibat',
+            jodoh: 'Menjodohkan',
+            urut: 'Mengurutkan',
+            isian: 'Isian Singkat',
+            uraian: 'Uraian'
+        };
+
+        const TEKS = [
+            {
+                id: 1, judul: 'Tanam Paksa, Aturan dan Kenyataan', bidang: 'Sejarah', rentang: '1 - 4',
+                blok: [
+                    { teks: `(1) Pada 1830, Gubernur Jenderal Johannes van den Bosch memberlakukan Sistem Tanam Paksa (Cultuurstelsel) di Hindia Belanda. (2) Kas negeri Belanda saat itu sedang menipis, sehingga sistem ini dirancang untuk mendatangkan pemasukan dari tanah jajahan. (3) Menurut aturan resmi, desa menyediakan tanah paling banyak seperlima bagian untuk ditanami tanaman ekspor, seperti tebu, kopi, dan nila. (4) Petani yang tidak memiliki tanah wajib bekerja di perkebunan atau pabrik pemerintah selama 66 hari dalam setahun. (5) Aturan itu juga menyatakan bahwa kegagalan panen di luar kesalahan petani menjadi tanggungan pemerintah. (6) Kelebihan hasil setelah dikurangi pajak tanah seharusnya dikembalikan kepada petani.` },
+                    { teks: `(7) Kenyataan di lapangan jauh berbeda. (8) Di banyak tempat, tanah yang dipakai melebihi seperlima, bahkan dapat mencapai separuh bila tanahnya kurang subur. (9) Kerja yang seharusnya 66 hari dilaporkan mencapai 200 sampai 225 hari dalam setahun. (10) Kegagalan panen justru dibebankan kepada petani. (11) Pelaksanaan di desa diserahkan kepada kepala desa dan pemimpin pribumi, sedangkan pengawasan umum dipegang pegawai Eropa. (12) Bagi Belanda hasilnya sangat besar: antara 1830 dan 1877, perbendaharaan negeri Belanda menerima sekitar 823 juta gulden dari Hindia. (13) Kritik mengeras pada pertengahan 1850-an. Salah satu pengkritik paling lantang adalah Eduard Douwes Dekker, yang menulis dengan nama samaran Multatuli dalam novel Max Havelaar (1860). (14) Hingga kini sejarawan masih berdebat: sebagian menilai rancangannya tidak terlalu memberatkan, tetapi pelaksanaannya menyengsarakan rakyat.` }
+                ]
+            },
+            {
+                id: 2, judul: 'Tanah yang Turun, Laut yang Naik', bidang: 'Geografi', rentang: '5 - 8',
+                blok: [
+                    { teks: `(1) Banjir rob di pesisir Jakarta tidak hanya disebabkan oleh naiknya air laut, tetapi juga oleh turunnya tanah. (2) Kedua proses itu berbeda, tetapi akibatnya bertemu: selisih tinggi antara daratan dan laut semakin kecil. (3) Menurut Menteri Koordinator Bidang Infrastruktur dan Pembangunan Kewilayahan, muka air laut naik sekitar 0,8 sampai 1,2 sentimeter per tahun akibat pemanasan global. (4) Sementara itu, data citra satelit BRIN pada Februari 2026 menunjukkan penurunan muka tanah di sejumlah wilayah Jakarta lebih dari 10 sentimeter per tahun. (5) Dengan kata lain, di wilayah tersebut tanah turun jauh lebih cepat daripada laut naik.` },
+                    { teks: `(6) BRIN menjelaskan bahwa tanah aluvial Jakarta memang memampat secara alami. (7) Namun, pengambilan air tanah mempercepatnya, karena rongga tanah yang kehilangan air akan memampat. (8) Air tanah banyak diambil oleh masyarakat dan pelaku usaha karena jaringan pipa air bersih belum merata. (9) Karena itu, BRIN menilai pengendalian pengambilan air tanah dan penyediaan air perpipaan sebagai langkah penting.` },
+                    { teks: `(10) Pemerintah menyiapkan tanggul laut raksasa (giant sea wall) di pesisir utara Jawa. (11) Namun, pemerintah juga mengingatkan bahwa tanggul tidak akan efektif jika penurunan tanah tidak diatasi, sebab kawasan pesisir akan terus turun dan tanggul dapat tenggelam lagi dalam sekitar sepuluh tahun. (12) Di Teluk Jakarta, Semarang, Demak, dan Kendal, penurunan tanah disebut rata-rata mencapai 5 sampai 20 sentimeter per tahun. (13) Karena itu, pembangunan tanggul perlu berjalan bersamaan dengan pembatasan pengambilan air tanah.` }
+                ]
+            },
+            {
+                id: 3, judul: 'Membaca Angka Inflasi', bidang: 'Ekonomi', rentang: '9 - 12',
+                blok: [
+                    { teks: `(1) Inflasi adalah kenaikan harga barang dan jasa secara umum dan terus-menerus, yang diukur Badan Pusat Statistik (BPS) dengan Indeks Harga Konsumen (IHK). (2) Pada 1 Oktober 2026, BPS mengumumkan inflasi September 2026 sebesar 3,28 persen secara tahunan (year-on-year), lebih tinggi daripada September 2025 yang sebesar 2,65 persen. (3) IHK naik dari 108,74 pada September 2025 menjadi 112,31 pada September 2026. (4) Secara bulanan, IHK naik dari 111,97 pada Agustus 2026 menjadi 112,31 pada September 2026, atau inflasi 0,30 persen. (5) Inflasi tahun kalender (Januari sampai September) mencapai 2,17 persen. (6) Seluruh 38 provinsi mengalami inflasi secara tahunan.` },
+                    { teks: `(7) Kelompok makanan, minuman, dan tembakau mengalami inflasi tahunan 4,37 persen dan memberi andil 1,28 persen terhadap inflasi nasional. (8) Kelompok transportasi mengalami inflasi 4,84 persen, tetapi andilnya hanya 0,58 persen; pendorongnya antara lain bensin, tarif angkutan udara, dan servis kendaraan. (9) Andil suatu kelompok ditentukan oleh dua hal: besarnya kenaikan harga dan bobot kelompok itu dalam pengeluaran masyarakat. (10) Pada inflasi bulanan, cabai rawit, cabai merah, dan daging ayam ras termasuk pendorong utama. (11) Di antara komoditas yang disebut BPS, emas perhiasan memberi andil terbesar pada inflasi tahunan, yaitu 0,44 persen.` },
+                    { teks: `(12) Berdasarkan komponen, andil terhadap inflasi tahunan September 2026 adalah sebagai berikut:` },
+                    { tabel: `<div class="overflow-x-auto border border-gray-200 rounded-xl mb-3"><table class="w-full text-sm"><thead><tr class="bg-gray-50 text-xs uppercase tracking-wider text-gray-500"><th class="p-2.5 text-left">Komponen</th><th class="p-2.5 text-right">Andil (persen)</th></tr></thead><tbody><tr class="border-t border-gray-100"><td class="p-2.5">Inti</td><td class="p-2.5 text-right">1,82</td></tr><tr class="border-t border-gray-100"><td class="p-2.5">Harga bergejolak</td><td class="p-2.5 text-right">0,83</td></tr><tr class="border-t border-gray-100"><td class="p-2.5">Harga diatur pemerintah</td><td class="p-2.5 text-right">0,63</td></tr></tbody></table></div>` },
+                    { teks: `(13) BPS mengimbau pemerintah mewaspadai tekanan harga pada November dan Desember karena konsumsi biasanya meningkat menjelang Natal dan Tahun Baru.` }
+                ]
+            },
+            {
+                id: 4, judul: 'Ojek Daring dan Perubahan Hubungan Kerja', bidang: 'Sosiologi', rentang: '13 - 16',
+                blok: [
+                    { teks: `(1) Dalam satu dekade terakhir, aplikasi transportasi daring mengubah cara orang bekerja dan bepergian. (2) Pengemudi ojek daring (ojol) bekerja lewat aplikasi, mengatur sendiri jam kerjanya, dan dibayar menurut jumlah order. (3) Hingga akhir 2022 tercatat lebih dari 3,7 juta mitra pengemudi di Indonesia. (4) Hubungan antara pengemudi dan perusahaan aplikasi dirumuskan sebagai kemitraan, bukan hubungan kerja. (5) Akibatnya, pengemudi dipandang sebagai pekerja mandiri sehingga tidak otomatis memperoleh hak seperti pekerja formal, misalnya gaji tetap, jaminan sosial, dan tunjangan hari raya (THR).` },
+                    { teks: `(6) Survei Litbang Kompas pada Februari 2026 menemukan bahwa 57,5 persen responden merasa dirugikan oleh status mitra, dan tiga dari sepuluh responden merasa status itu sangat merugikan. (7) Pemerintah pernah melontarkan wacana mengubah status pengemudi menjadi pekerja agar hak mereka lebih terlindungi. (8) Di sisi lain, Koalisi Ojol Nasional (KON) pada 1 Oktober 2026 memilih mempertahankan status mitra, tetapi meminta perjanjian kemitraan diperkuat agar perlindungan dan kesejahteraan pengemudi meningkat. (9) Kelompok ini menilai kesejahteraan dapat ditingkatkan tanpa mengubah status menjadi hubungan kerja formal.` },
+                    { teks: `(10) Bagi sebagian pengemudi, kemitraan berarti kebebasan memilih jam kerja, bahkan bermitra dengan lebih dari satu aplikasi. (11) Bagi pengemudi lain, kebebasan itu terasa semu karena penghasilan tetap bergantung pada jumlah order dan aturan aplikasi. (12) Perbedaan pengalaman ini menunjukkan bahwa perubahan teknologi tidak dirasakan sama oleh semua kelompok.` }
+                ]
+            },
+            {
+                id: 5, judul: 'Pulau Kecil yang Ditukar dengan Manhattan', bidang: 'Sejarah dan Ekonomi', rentang: '17 - 20',
+                blok: [
+                    { teks: `(1) Hingga pertengahan abad ke-17, pohon pala tumbuh secara alami hanya di Kepulauan Banda, Maluku. (2) Pala dan bunga pala sangat diburu di Eropa sehingga bangsa-bangsa Eropa berlayar jauh untuk mendapatkannya. (3) Pelaut Portugis mencapai Banda pada 1512. (4) Belanda datang kemudian dan membentuk perusahaan dagang VOC pada 1602. (5) VOC mewajibkan penduduk Banda menjual pala hanya kepada VOC. (6) Pada 1621, VOC menyerang Banda setelah warga menolak monopoli dagang itu.` },
+                    { teks: `(7) Meski begitu, Inggris masih menguasai Pulau Run, pulau kecil di Kepulauan Banda, sehingga monopoli VOC belum utuh. (8) Persaingan Inggris dan Belanda diselesaikan lewat Perjanjian Breda pada 31 Juli 1667. (9) Inggris menyerahkan Pulau Run kepada Belanda, sedangkan Belanda melepaskan Nieuw Amsterdam, yang kini bernama Manhattan. (10) Manhattan jauh lebih luas daripada Run, tetapi pada waktu itu pala dianggap lebih menguntungkan.` },
+                    { teks: `(11) Untuk menjaga monopoli, Belanda merahasiakan lokasi Banda dan memandulkan biji pala yang dijual. (12) Namun pada 1769, ahli hortikultura Prancis bernama Pierre Poivre berhasil menyelundupkan bibit pala keluar dari Banda sehingga pala dapat ditanam di tempat lain. (13) Sejak itu, keunggulan Banda sebagai satu-satunya penghasil pala tidak bertahan. (14) Kini Manhattan menjadi pusat bisnis dan budaya dunia, sedangkan Banda lebih sunyi, meskipun pala masih menjadi komoditas unggulan Pulau Run.` }
+                ]
+            }
+        ];
+
+        const SOAL = [
+            {
+                no: 1, teks: 1, bentuk: 'pg',
+                soal: `Kesimpulan yang paling tepat tentang hubungan antara aturan resmi dan pelaksanaan Tanam Paksa adalah ....`,
+                opsi: [
+                    `Pelaksanaan lebih ringan daripada aturan karena pengawasan ketat.`,
+                    `Aturan dan pelaksanaan sama persis sehingga tidak ada penyimpangan.`,
+                    `Aturan membatasi beban petani, tetapi pelaksanaannya melampaui batas itu.`,
+                    `Aturan sudah memberatkan sejak awal dan pelaksanaan tidak mengubahnya.`
+                ]
+            },
+            {
+                no: 2, teks: 1, bentuk: 'klasifikasi', kode: ['A', 'P', 'T'],
+                soal: `Tulis kode <strong>A</strong> jika pernyataan merupakan <em>aturan resmi</em>, <strong>P</strong> jika merupakan <em>penyimpangan dalam pelaksanaan</em>, atau <strong>T</strong> jika <em>tidak disebut dalam teks</em>.`,
+                butir: [
+                    { k: 'a', t: `Petani tanpa tanah bekerja selama 66 hari dalam setahun.` },
+                    { k: 'b', t: `Petani tanpa tanah bekerja hingga 225 hari dalam setahun.` },
+                    { k: 'c', t: `Kerugian akibat gagal panen ditanggung petani.` },
+                    { k: 'd', t: `Petani dibebaskan dari semua jenis pajak.` },
+                    { k: 'e', t: `Tanah untuk tanaman ekspor paling banyak seperlima bagian.` }
+                ]
+            },
+            {
+                no: 3, teks: 1, bentuk: 'isian',
+                soal: `Sebuah desa memiliki 60 hektare tanah pertanian. Isilah dua bagian berikut sesuai aturan resmi dan perhitungan!`,
+                items: [
+                    { k: 'a', label: 'Tanah untuk tanaman ekspor paling banyak', satuan: 'hektare' },
+                    { k: 'b', label: 'Tanah yang melampaui batas aturan, jika pelaksanaan memakai separuh dari seluruh tanah', satuan: 'hektare' }
+                ]
+            },
+            {
+                no: 4, teks: 1, bentuk: 'uraian', maks: 5,
+                soal: `Seorang murid berpendapat: "Tanam Paksa pada dasarnya sistem yang adil, hanya pelaksanaannya yang bermasalah." Setujukah kamu? Tulis jawaban 4-5 kalimat dengan bukti dari paling sedikit tiga nomor kalimat dalam teks!`,
+                hint: `Tulis 4-5 kalimat dengan bukti dari paling sedikit tiga nomor kalimat.`
+            },
+            {
+                no: 5, teks: 2, bentuk: 'pg',
+                soal: `Pernyataan yang paling tepat tentang perbedaan penurunan muka tanah dan kenaikan muka laut berdasarkan teks adalah ....`,
+                opsi: [
+                    `Tanah turun akibat proses di daratan, sedangkan laut naik akibat pemanasan global.`,
+                    `Keduanya sama-sama proses naiknya air laut dengan penyebab berbeda.`,
+                    `Kenaikan muka laut lebih cepat daripada penurunan muka tanah di seluruh Jakarta.`,
+                    `Tanah turun hanya karena pemanasan global, sedangkan laut naik karena air tanah.`
+                ]
+            },
+            {
+                no: 6, teks: 2, bentuk: 'pilih',
+                soal: `Pernyataan manakah yang sesuai dengan teks? Pilih <strong>semua</strong> yang benar!`,
+                opsi: [
+                    `Pengambilan air tanah mempercepat memampatnya rongga tanah.`,
+                    `Di wilayah yang diteliti BRIN, muka laut naik lebih cepat daripada tanah turun.`,
+                    `Jaringan pipa air bersih yang belum merata mendorong pengambilan air tanah.`,
+                    `Tanggul laut raksasa sudah cukup tanpa upaya lain.`
+                ]
+            },
+            {
+                no: 7, teks: 2, bentuk: 'isian',
+                soal: `Misalkan di suatu lokasi tanah turun tepat 10 sentimeter per tahun, sedangkan muka laut naik 1 sentimeter per tahun. Isilah dua bagian berikut!`,
+                items: [
+                    { k: 'a', label: 'Selisih tinggi daratan dan laut berkurang per tahun', satuan: 'sentimeter per tahun' },
+                    { k: 'b', label: 'Selisih tinggi daratan dan laut berkurang dalam 10 tahun', satuan: 'sentimeter' }
+                ]
+            },
+            {
+                no: 8, teks: 2, bentuk: 'uraian', maks: 5,
+                soal: `Seorang murid berpendapat: "Bangun saja tanggul setinggi mungkin, maka masalah banjir rob selesai." Tanggapi pendapat itu! Tulis dua alasan yang didukung nomor kalimat dalam teks, lalu satu saran kebijakan pendamping.`,
+                hint: `Tulis dua alasan bernomor kalimat, lalu satu saran kebijakan pendamping.`
+            },
+            {
+                no: 9, teks: 3, bentuk: 'pg',
+                soal: `Inflasi kelompok transportasi (4,84 persen) lebih tinggi daripada kelompok makanan (4,37 persen), tetapi andilnya lebih kecil. Penjelasan yang paling tepat berdasarkan teks adalah ....`,
+                opsi: [
+                    `BPS salah menghitung andil kelompok transportasi pada inflasi nasional.`,
+                    `Inflasi transportasi hanya terjadi di sebagian provinsi di Indonesia.`,
+                    `Andil dan tingkat inflasi suatu kelompok selalu sama besar.`,
+                    `Kelompok makanan memiliki bobot lebih besar dalam pengeluaran masyarakat.`
+                ]
+            },
+            {
+                no: 10, teks: 3, bentuk: 'isian', desimal: true,
+                soal: `Berdasarkan IHK pada teks, isilah dua bagian berikut!`,
+                items: [
+                    { k: 'a', label: 'IHK naik dari Agustus ke September 2026', satuan: 'poin' },
+                    { k: 'b', label: 'IHK naik dari September 2025 ke September 2026', satuan: 'poin' }
+                ]
+            },
+            {
+                no: 11, teks: 3, bentuk: 'bstd', kode: ['B', 'S', 'TD'],
+                soal: `Tulis <strong>B</strong> (benar), <strong>S</strong> (salah), atau <strong>TD</strong> (tidak dapat disimpulkan dari teks).`,
+                butir: [
+                    { k: 'a', t: `Inflasi tahunan September 2026 lebih tinggi daripada September 2025.` },
+                    { k: 'b', t: `Hanya sebagian provinsi yang mengalami inflasi tahunan.` },
+                    { k: 'c', t: `Harga cabai pasti terus naik pada November dan Desember 2026.` },
+                    { k: 'd', t: `Di antara tiga komponen, komponen inti memberi andil terbesar.` }
+                ]
+            },
+            {
+                no: 12, teks: 3, bentuk: 'uraian', maks: 5,
+                soal: `Seorang murid berkata: "Inflasi 3,28 persen berarti semua harga barang naik tepat 3,28 persen." Nilailah pernyataan itu! Gunakan paling sedikit dua data dari teks dan jelaskan apa arti angka inflasi tersebut.`,
+                hint: `Gunakan paling sedikit dua data dari teks.`
+            },
+            {
+                no: 13, teks: 4, bentuk: 'pg',
+                soal: `Perbedaan sikap antara pihak yang mendorong perubahan status dan Koalisi Ojol Nasional paling tepat disimpulkan sebagai ....`,
+                opsi: [
+                    `pertentangan tujuan: satu pihak ingin pengemudi terlindungi, sedangkan pihak lain tidak.`,
+                    `perbedaan cara untuk tujuan yang sama, yakni perlindungan yang lebih baik.`,
+                    `penolakan pemerintah terhadap semua bentuk kerja sama dengan perusahaan aplikasi daring.`,
+                    `penolakan KON terhadap setiap aturan baru yang mengatur pengemudi ojek daring.`
+                ]
+            },
+            {
+                no: 14, teks: 4, bentuk: 'pilih',
+                soal: `Berdasarkan data survei pada kalimat (6), pernyataan manakah yang benar? Pilih <strong>semua</strong> yang benar!`,
+                opsi: [
+                    `Lebih dari separuh responden merasa dirugikan oleh status mitra.`,
+                    `Sekitar 30 persen responden merasa status mitra sangat merugikan.`,
+                    `Seluruh responden merasa dirugikan oleh status mitra.`,
+                    `Survei membuktikan semua pengemudi ingin menjadi pekerja tetap.`
+                ]
+            },
+            {
+                no: 15, teks: 4, bentuk: 'jodoh',
+                soal: `Jodohkan setiap pihak dengan isi pernyataan yang tepat berdasarkan teks! Ada satu pernyataan yang tidak terpakai.`,
+                istilah: [
+                    { k: '1', t: `Survei Litbang Kompas` },
+                    { k: '2', t: `Koalisi Ojol Nasional` },
+                    { k: '3', t: `Pemerintah` }
+                ],
+                pengertian: [
+                    { k: 'P', t: `Memilih mempertahankan status mitra sambil meminta perjanjian diperkuat` },
+                    { k: 'Q', t: `Melontarkan wacana mengubah status pengemudi menjadi pekerja` },
+                    { k: 'R', t: `Menemukan 57,5 persen responden merasa dirugikan oleh status mitra` },
+                    { k: 'S', t: `Mewajibkan setiap pengemudi bermitra dengan satu aplikasi saja` }
+                ]
+            },
+            {
+                no: 16, teks: 4, bentuk: 'uraian', maks: 5,
+                soal: `Kamu diminta menyusun usulan yang dapat diterima kedua pihak. Tulis satu hak pengemudi yang perlu dilindungi dan satu bentuk kebebasan yang perlu dipertahankan. Jelaskan alasannya dengan bukti dari paling sedikit dua nomor kalimat, lalu sebutkan satu dampak sosial yang diharapkan.`,
+                hint: `Tulis dengan bukti dari paling sedikit dua nomor kalimat.`
+            },
+            {
+                no: 17, teks: 5, bentuk: 'pg',
+                soal: `Alasan yang paling tepat mengapa Belanda bersedia melepaskan Nieuw Amsterdam demi Pulau Run adalah ....`,
+                opsi: [
+                    `Menguasai Run mengamankan monopoli pala yang langka dan menguntungkan.`,
+                    `Nieuw Amsterdam saat itu sulit dikelola dan tidak punya nilai.`,
+                    `Inggris memaksa Belanda menyerahkan Nieuw Amsterdam setelah menyerang Banda.`,
+                    `VOC ingin memindahkan pusat perdagangannya ke Amerika.`
+                ]
+            },
+            {
+                no: 18, teks: 5, bentuk: 'urut', urutan: 5,
+                soal: `Urutkan peristiwa berikut dari yang paling awal sampai paling akhir dengan memilih huruf untuk setiap urutan!`,
+                pilihan: [
+                    { k: 'A', t: `Perjanjian Breda ditandatangani` },
+                    { k: 'B', t: `Portugis mencapai Banda` },
+                    { k: 'C', t: `Pierre Poivre menyelundupkan bibit pala` },
+                    { k: 'D', t: `VOC dibentuk` },
+                    { k: 'E', t: `VOC menyerang Banda karena warga menolak monopoli` }
+                ]
+            },
+            {
+                no: 19, teks: 5, bentuk: 'sebab', kode: ['B', 'S'],
+                soal: `Tulis <strong>B</strong> jika hubungan sebab-akibat benar menurut teks, atau <strong>S</strong> jika salah.`,
+                butir: [
+                    { k: 'a', sebab: `Pala hanya tumbuh di Banda.`, akibat: `Bangsa-bangsa Eropa berebut menguasai Banda.` },
+                    { k: 'b', sebab: `Warga Banda menolak monopoli VOC.`, akibat: `VOC menyerang Banda pada 1621.` },
+                    { k: 'c', sebab: `Bibit pala diselundupkan keluar Banda.`, akibat: `Banda tidak lagi menjadi satu-satunya penghasil pala.` },
+                    { k: 'd', sebab: `Inggris menyerahkan Pulau Run kepada Belanda.`, akibat: `Inggris kehilangan Nieuw Amsterdam.` }
+                ]
+            },
+            {
+                no: 20, teks: 5, bentuk: 'uraian', maks: 5,
+                soal: `Sebagian orang menganggap Belanda "rugi" menukar Manhattan. Jelaskan dengan bukti dari teks (a) dasar penilaian pada abad ke-17, (b) penyebab penilaian itu berubah, dan (c) pelajaran tentang bagaimana nilai ekonomi suatu wilayah dapat berubah!`,
+                hint: `Jelaskan (a), (b), dan (c) dengan bukti nomor kalimat.`
+            }
+        ];
+
+        let state = {
+            screen: 'welcome', // 'welcome' | 'biodata' | 'quiz' | 'terkunci' | 'selesai' | 'done'
+            idx: 0,
+            jawaban: {},
+            biodata: { nama: '', kelas: '' },
+            pelanggaran: [],
+            sesi: null,
+            kunciLokal: false,
+            bukaNoSaatKunci: 0,
+            jenisKunci: '',
+            pesanKunci: '',
+            submitted: false,
+            statusKirim: null,
+            sisa: DURASI,
+            timer: null
+        };
+
+        function esc(s) {
+            return String(s ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function loadState() {
+            try {
+                const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+                if (!saved) return;
+                state.jawaban = saved.jawaban || {};
+                state.biodata = saved.biodata || { nama: '', kelas: '' };
+                state.pelanggaran = saved.pelanggaran || [];
+                state.sesi = saved.sesi || null;
+                state.kunciLokal = !!saved.kunciLokal;
+                state.bukaNoSaatKunci = saved.bukaNoSaatKunci || 0;
+                state.jenisKunci = saved.jenisKunci || '';
+                state.idx = typeof saved.idx === 'number' ? saved.idx : 0;
+                state.sisa = typeof saved.sisa === 'number' ? saved.sisa : DURASI;
+                state.submitted = !!saved.submitted;
+                state.statusKirim = saved.statusKirim === 'mengirim' ? 'gagal' : (saved.statusKirim || null);
+                if (state.submitted) {
+                    state.screen = 'done';
+                } else if (['quiz', 'biodata', 'terkunci'].includes(saved.screen)) {
+                    state.screen = saved.screen;
+                }
+            } catch (e) {
+                console.error("Gagal membaca memori lokal", e);
+            }
+        }
+
+        function saveState() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify({
+                    jawaban: state.jawaban,
+                    biodata: state.biodata,
+                    pelanggaran: state.pelanggaran,
+                    sesi: state.sesi,
+                    kunciLokal: state.kunciLokal,
+                    bukaNoSaatKunci: state.bukaNoSaatKunci,
+                    jenisKunci: state.jenisKunci,
+                    idx: state.idx,
+                    sisa: state.sisa,
+                    submitted: state.submitted,
+                    statusKirim: state.statusKirim,
+                    screen: state.screen
+                }));
+            } catch (e) {
+                console.error("Gagal menyimpan memori lokal", e);
+            }
+        }
+
+        function hitungSisa(s) {
+            const akhir = s.status === 'terkunci' && s.terkunci_sejak ? new Date(s.terkunci_sejak).getTime() : Date.now();
+            const berjalan = (akhir - new Date(s.mulai).getTime()) / 1000 - (s.jeda_detik || 0);
+            return Math.max(0, Math.floor(DURASI - berjalan));
+        }
+
+        function startTimer() {
+            clearInterval(state.timer);
+            state.timer = setInterval(() => {
+                if (state.screen !== 'quiz') return;
+                state.sisa--;
+                if (state.sisa <= 0) {
+                    state.sisa = 0;
+                    updateTimerUI();
+                    submitQuiz(true);
+                    return;
+                }
+                saveState();
+                updateTimerUI();
+            }, 1000);
+        }
+
+        function formatWaktu(detik) {
+            const m = Math.floor(detik / 60).toString().padStart(2, '0');
+            const d = (detik % 60).toString().padStart(2, '0');
+            return `${m}:${d}`;
+        }
+
+        function updateTimerUI() {
+            const el = document.getElementById('quiz-timer');
+            if (!el) return;
+            el.textContent = formatWaktu(state.sisa);
+            el.parentElement.classList.toggle('bg-red-500', state.sisa <= 300);
+            el.parentElement.classList.toggle('bg-white/10', state.sisa > 300);
+        }
+
+        function render() {
+            const container = document.getElementById('app-container');
+            if (!container) return;
+
+            if (state.screen === 'welcome') {
+                container.innerHTML = renderWelcome();
+            } else if (state.screen === 'biodata') {
+                container.innerHTML = renderBiodata();
+            } else if (state.screen === 'quiz') {
+                container.innerHTML = renderQuiz();
+                updateTimerUI();
+            } else if (state.screen === 'terkunci') {
+                container.innerHTML = renderTerkunci();
+            } else if (state.screen === 'selesai') {
+                container.innerHTML = renderSelesai();
+            } else {
+                container.innerHTML = renderDone();
+            }
+            saveState();
+        }
+
+        function renderWelcome() {
+            const adaJawaban = Object.keys(state.jawaban).length > 0;
+            return `
+                <div class="bg-brand-blue text-white pt-10 pb-20 px-4 sm:px-6 relative overflow-hidden">
+                    <div class="max-w-5xl mx-auto relative z-10">
+                        <div class="inline-flex items-center space-x-2 bg-white/10 px-3.5 py-1.5 rounded-full text-xs font-semibold mb-4 text-blue-200">
+                            <i class="fa-solid fa-earth-asia text-orange-400"></i>
+                            <span>Seleksi Olimpiade IPS SMP</span>
+                        </div>
+                        <h1 class="text-2xl sm:text-3xl font-extrabold mb-3 leading-snug">
+                            Tes Seleksi Olimpiade IPS SMP Muhammadiyah 9 Jakarta
+                        </h1>
+                        <p class="text-blue-100 text-sm max-w-2xl leading-relaxed">
+                            Uji ketelitian membaca, kemampuan menemukan informasi, dan penalaranmu melalui lima teks dari bidang Sejarah, Geografi, Ekonomi, Sosiologi, dan Sejarah-Ekonomi.
+                        </p>
+                    </div>
+                    <div class="absolute -right-10 -bottom-10 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl pointer-events-none"></div>
+                </div>
+
+                <div class="max-w-5xl mx-auto px-4 sm:px-6 -mt-12 mb-12 relative z-20 w-full space-y-6">
+                    <div class="bg-white rounded-2xl p-5 shadow-md border border-gray-100 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div class="flex items-center space-x-4 border-b sm:border-b-0 sm:border-r border-gray-100 pb-4 sm:pb-0 sm:pr-4">
+                            <div class="w-12 h-12 rounded-xl bg-orange-50 text-brand-orange flex items-center justify-center text-xl shrink-0">
+                                <i class="fa-solid fa-clipboard-check"></i>
+                            </div>
+                            <div>
+                                <span class="text-xs font-semibold text-gray-500 block uppercase tracking-wider">Total Soal</span>
+                                <span class="text-lg font-bold text-gray-900">20 Soal dari 5 Teks</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-4 border-b sm:border-b-0 sm:border-r border-gray-100 pb-4 sm:pb-0 sm:pr-4">
+                            <div class="w-12 h-12 rounded-xl bg-blue-50 text-brand-blue flex items-center justify-center text-xl shrink-0">
+                                <i class="fa-solid fa-stopwatch"></i>
+                            </div>
+                            <div>
+                                <span class="text-xs font-semibold text-gray-500 block uppercase tracking-wider">Waktu Pengerjaan</span>
+                                <span class="text-lg font-bold text-gray-900">60 Menit</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-4">
+                            <div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl shrink-0">
+                                <i class="fa-solid fa-graduation-cap"></i>
+                            </div>
+                            <div>
+                                <span class="text-xs font-semibold text-gray-500 block uppercase tracking-wider">Jenjang</span>
+                                <span class="text-lg font-bold text-gray-900">Kelas 7 - 9 SMP</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-2xl p-6 shadow-md border border-gray-100">
+                        <div class="flex items-center space-x-3 mb-4">
+                            <div class="w-9 h-9 rounded-xl bg-blue-50 text-brand-blue flex items-center justify-center font-bold">
+                                <i class="fa-solid fa-file-pen text-base"></i>
+                            </div>
+                            <h2 class="text-base font-bold text-gray-900">Petunjuk Pengerjaan</h2>
+                        </div>
+                        <ol class="space-y-3 text-xs sm:text-sm text-gray-600 list-decimal list-inside leading-relaxed">
+                            <li>Baca setiap teks sampai habis. Kalimat diberi nomor agar mudah dirujuk.</li>
+                            <li>Jawab <strong>hanya</strong> berdasarkan isi teks. Pengetahuan di luar teks tidak boleh dipakai untuk menilai benar atau salah.</li>
+                            <li>Perhatikan kata kunci pada soal: <em>KECUALI</em>, <em>hanya</em>, <em>semua</em>, <em>pasti</em>, angka, satuan, dan tahun.</li>
+                            <li>Ada tujuh bentuk soal. Baca petunjuk tiap soal sebelum menjawab.</li>
+                            <li>Pada soal uraian, tulis jawaban dengan alasan dan sebutkan nomor kalimat sebagai bukti.</li>
+                            <li>Kerjakan soal yang paling yakin dulu, lalu kembali ke soal yang sulit.</li>
+                            <li><strong>Selama tes, aktivitas di luar halaman (pindah tab, keluar aplikasi, menyalin, atau menempel) akan mengunci tes. Tes hanya bisa dilanjutkan dengan kode dari pengawas.</strong></li>
+                        </ol>
+                    </div>
+
+                    <div class="bg-white rounded-2xl p-6 shadow-md border border-gray-100">
+                        <h2 class="text-base font-bold text-gray-900 mb-4">Teks dan Soal</h2>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            ${TEKS.map(t => `
+                                <div class="flex items-center space-x-3 p-3 rounded-xl border border-gray-100 bg-gray-50/60">
+                                    <span class="w-8 h-8 rounded-lg bg-brand-blue text-white text-xs font-bold flex items-center justify-center shrink-0">${t.id}</span>
+                                    <div class="min-w-0">
+                                        <span class="block text-xs font-bold text-brand-orange uppercase tracking-wider">${t.bidang}</span>
+                                        <span class="block text-sm font-semibold text-gray-800 truncate">${t.judul}</span>
+                                        <span class="block text-xs text-gray-500">Soal ${t.rentang}</span>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white border-t border-gray-200 p-4 sticky bottom-0 left-0 right-0 z-20">
+                    <div class="max-w-5xl mx-auto">
+                        <button onclick="bukaBiodata()" class="w-full py-3.5 bg-brand-orange hover:bg-brand-orangeHover text-white font-bold rounded-xl transition shadow-lg text-center text-base flex items-center justify-center space-x-2">
+                            <span>${adaJawaban ? 'Lanjutkan Mengerjakan' : 'Mulai Kerjakan Soal'}</span>
+                            <i class="fa-solid fa-arrow-right"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderBiodata() {
+            const kelasOptions = KELAS.map(g => `
+                <optgroup label="Kelas ${g.tingkat}">
+                    ${g.nama.map(n => {
+                        const nilai = `${g.tingkat} ${n}`;
+                        return `<option value="${esc(nilai)}" ${state.biodata.kelas === nilai ? 'selected' : ''}>${nilai}</option>`;
+                    }).join('')}
+                </optgroup>
+            `).join('');
+
+            return `
+                <div class="bg-brand-blue text-white pt-10 pb-20 px-4 sm:px-6 relative overflow-hidden">
+                    <div class="max-w-xl mx-auto relative z-10">
+                        <div class="inline-flex items-center space-x-2 bg-white/10 px-3.5 py-1.5 rounded-full text-xs font-semibold mb-4 text-blue-200">
+                            <i class="fa-solid fa-id-card text-orange-400"></i>
+                            <span>Langkah 1 dari 2</span>
+                        </div>
+                        <h1 class="text-2xl sm:text-3xl font-extrabold mb-3 leading-snug">Biodata Peserta</h1>
+                        <p class="text-blue-100 text-sm leading-relaxed">Isi data dirimu dengan benar sebelum mulai mengerjakan soal.</p>
+                    </div>
+                    <div class="absolute -right-10 -bottom-10 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl pointer-events-none"></div>
+                </div>
+
+                <div class="max-w-xl mx-auto px-4 sm:px-6 -mt-12 mb-12 relative z-20 w-full">
+                    <div class="bg-white rounded-2xl p-6 sm:p-8 shadow-xl border border-gray-100 space-y-6">
+                        <div>
+                            <label for="bio-nama" class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">1. Nama Lengkap</label>
+                            <input id="bio-nama" type="text" value="${esc(state.biodata.nama)}" placeholder="Contoh: Ahmad Fauzi" class="w-full p-4 border-2 border-gray-200 focus:border-brand-blue rounded-xl text-sm outline-none transition">
+                        </div>
+
+                        <div>
+                            <label for="bio-kelas" class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">2. Kelas</label>
+                            <select id="bio-kelas" class="w-full p-4 border-2 border-gray-200 focus:border-brand-blue rounded-xl text-sm bg-white outline-none transition">
+                                <option value="">-- Pilih Kelas --</option>
+                                ${kelasOptions}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white border-t border-gray-200 p-4 sticky bottom-0 left-0 right-0 z-20">
+                    <div class="max-w-xl mx-auto flex items-center justify-between gap-3">
+                        <button onclick="kembaliDariBiodata()" class="px-5 py-2.5 rounded-xl border border-gray-300 hover:bg-gray-50 text-xs font-semibold text-gray-700 transition flex items-center space-x-2">
+                            <i class="fa-solid fa-chevron-left text-xs"></i>
+                            <span>Kembali</span>
+                        </button>
+                        <button onclick="simpanBiodata()" class="flex-1 py-3 bg-brand-orange hover:bg-brand-orangeHover text-white font-bold rounded-xl transition shadow-lg text-sm flex items-center justify-center space-x-2">
+                            <span>Mulai Mengerjakan</span>
+                            <i class="fa-solid fa-arrow-right"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderTerkunci() {
+            const jenis = state.jenisKunci || 'Aktivitas di luar halaman tes';
+            return `
+                <div class="bg-red-600 text-white pt-10 pb-16 px-4 sm:px-6">
+                    <div class="max-w-md mx-auto text-center">
+                        <div class="w-16 h-16 mx-auto rounded-full bg-white/20 flex items-center justify-center text-2xl">
+                            <i class="fa-solid fa-lock"></i>
+                        </div>
+                        <h1 class="text-xl sm:text-2xl font-extrabold mt-4">Tes Dikunci</h1>
+                        <p class="text-red-100 text-sm mt-2">Terdeteksi: ${esc(jenis)}</p>
+                    </div>
+                </div>
+
+                <div class="max-w-md mx-auto px-4 -mt-8 mb-12 w-full">
+                    <div class="bg-white rounded-2xl p-6 shadow-xl border border-gray-100 space-y-5">
+                        <p class="text-sm text-gray-700 leading-relaxed">
+                            Jawabanmu tersimpan. Tes tidak dapat dilanjutkan sampai pengawas memberikan kode buka. Jangan keluar dari halaman ini.
+                        </p>
+                        <form onsubmit="event.preventDefault(); bukaDenganKode(this.kode.value.trim());" class="space-y-3">
+                            <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider">Kode dari pengawas</label>
+                            <input name="kode" type="text" autocomplete="off" required maxlength="10" class="w-full p-4 border-2 border-gray-200 focus:border-brand-blue rounded-xl text-center text-lg font-bold tracking-widest uppercase outline-none transition">
+                            <button type="submit" class="w-full py-3 bg-brand-blue hover:bg-blue-900 text-white font-bold rounded-xl transition">
+                                Buka Kunci
+                            </button>
+                        </form>
+                        ${state.pesanKunci ? `<p class="text-xs text-red-600 text-center">${esc(state.pesanKunci)}</p>` : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderSelesai() {
+            return `
+                <div class="bg-brand-blue text-white py-10 px-4 sm:px-6">
+                    <div class="max-w-4xl mx-auto text-center">
+                        <h1 class="text-xl sm:text-2xl font-bold mb-1">Tes Sudah Selesai</h1>
+                        <p class="text-xs text-blue-200">Tes Seleksi Olimpiade IPS SMP Muhammadiyah 9 Jakarta</p>
+                    </div>
+                </div>
+                <div class="max-w-md mx-auto px-4 -mt-10 mb-12 w-full">
+                    <div class="bg-white rounded-2xl p-8 shadow-xl border border-gray-100 text-center space-y-4">
+                        <div class="w-16 h-16 mx-auto rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center text-2xl">
+                            <i class="fa-solid fa-circle-check"></i>
+                        </div>
+                        <p class="text-sm text-gray-700 leading-relaxed">
+                            Nama ini sudah pernah mengumpulkan tes. Jika perlu mengerjakan ulang, hubungi pengawas.
+                        </p>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderQuiz() {
+            const s = SOAL[state.idx];
+            const t = TEKS.find(x => x.id === s.teks);
+
+            return `
+                <div class="bg-brand-blue text-white py-3 px-4 sm:px-6 shadow-md">
+                    <div class="max-w-6xl mx-auto flex items-center justify-between">
+                        <div class="flex items-center space-x-3 min-w-0">
+                            <button onclick="state.screen='welcome'; render();" class="bg-white/10 hover:bg-white/20 p-2 rounded-full text-white text-xs shrink-0 transition" title="Ke Beranda">
+                                <i class="fa-solid fa-arrow-left"></i>
+                            </button>
+                            <h2 class="text-xs sm:text-sm font-semibold truncate max-w-md">
+                                Tes Seleksi Olimpiade IPS SMP Muhammadiyah 9 Jakarta
+                            </h2>
+                        </div>
+                        <div class="flex items-center space-x-4">
+                            <span id="pelanggaran-pill" class="${state.pelanggaran.length ? '' : 'hidden'} bg-red-500 px-3 py-1.5 rounded-full text-xs font-bold">Pelanggaran: ${state.pelanggaran.length}</span>
+                            <div class="flex items-center space-x-2 bg-white/10 px-3 py-1.5 rounded-full text-xs font-medium">
+                                <i class="fa-regular fa-clock text-orange-300"></i>
+                                <span id="quiz-timer">60:00</span>
+                            </div>
+                            <button onclick="toggleModal(true)" class="bg-white text-brand-blue hover:bg-blue-50 px-3.5 py-1.5 rounded-xl text-xs font-bold transition shadow-sm">
+                                Kumpulkan
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white border-b border-gray-200 py-3 px-4 sm:px-6 sticky top-0 z-20 shadow-sm">
+                    <div class="max-w-6xl mx-auto flex items-center justify-between gap-4">
+                        <span class="text-sm font-bold text-gray-900 shrink-0">Soal ${state.idx + 1}/${SOAL.length}</span>
+
+                        <div id="nav-pills" class="flex items-center space-x-1.5 overflow-x-auto custom-scrollbar px-2 py-1">
+                            ${renderPills()}
+                        </div>
+
+                        <button onclick="toggleModal(true)" class="hidden sm:flex items-center space-x-1.5 px-3 py-1.5 border border-gray-300 hover:bg-gray-50 rounded-xl text-xs font-semibold text-gray-700 transition shrink-0">
+                            <i class="fa-solid fa-border-all text-xs"></i>
+                            <span>Semua Soal</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="max-w-6xl mx-auto px-4 sm:px-6 py-6 w-full flex-grow grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                    <section class="lg:col-span-5 bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                        <div class="px-6 pt-6 pb-4 border-b border-gray-100">
+                            <span class="text-xs font-bold px-2.5 py-1 bg-orange-50 text-brand-orange rounded-lg uppercase tracking-wider">Teks ${t.id} - ${t.bidang}</span>
+                            <h3 class="text-base font-bold text-gray-900 mt-3">${t.judul}</h3>
+                        </div>
+                        <div class="p-6 overflow-y-auto custom-scrollbar lg:max-h-[70vh]">
+                            ${renderTeks(t)}
+                        </div>
+                    </section>
+
+                    <section class="lg:col-span-7 bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-gray-200 flex flex-col">
+                        <div class="flex items-center space-x-2 mb-4">
+                            <span class="text-xs font-bold px-2.5 py-1 bg-blue-50 text-brand-blue rounded-lg uppercase tracking-wider">${BENTUK[s.bentuk]}</span>
+                            <span class="text-xs font-bold text-gray-400">No. ${s.no}</span>
+                        </div>
+                        <div class="text-sm sm:text-base text-gray-800 font-medium leading-relaxed mb-6">
+                            ${s.soal}
+                        </div>
+
+                        <div class="flex-grow">
+                            ${renderJawaban(s, state.jawaban[s.no])}
+                        </div>
+
+                        <div class="mt-8 pt-4 border-t border-gray-50 text-xs text-gray-400 flex items-center justify-between">
+                            <span>Tes Seleksi Olimpiade IPS SMP - Soal ${s.no}</span>
+                            <button onclick="showToast('Laporan soal telah terkirim!')" class="text-gray-400 hover:text-gray-600 flex items-center space-x-1">
+                                <i class="fa-regular fa-flag"></i>
+                                <span>Laporkan Soal</span>
+                            </button>
+                        </div>
+                    </section>
+                </div>
+
+                <div class="bg-white border-t border-gray-200 p-4 sticky bottom-0 z-20">
+                    <div class="max-w-6xl mx-auto flex items-center justify-between">
+                        <button onclick="prevQuestion()" ${state.idx === 0 ? 'disabled class="opacity-40 cursor-not-allowed px-5 py-2.5 rounded-xl border border-gray-300 text-xs font-semibold text-gray-400"' : 'class="px-5 py-2.5 rounded-xl border border-gray-300 hover:bg-gray-50 text-xs font-semibold text-gray-700 transition flex items-center space-x-2"'}>
+                            <i class="fa-solid fa-chevron-left text-xs"></i>
+                            <span>Sebelumnya</span>
+                        </button>
+
+                        <button onclick="nextQuestion()" class="px-6 py-2.5 bg-brand-orange hover:bg-brand-orangeHover text-white font-bold rounded-xl text-xs transition shadow-md flex items-center space-x-2">
+                            <span>${state.idx === SOAL.length - 1 ? 'Ringkasan & Kumpulkan' : 'Berikutnya'}</span>
+                            <i class="fa-solid fa-chevron-right text-xs"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderTeks(t) {
+            return t.blok.map(b => {
+                if (b.tabel) return b.tabel;
+                return b.teks.split(/ (?=\(\d+\) )/).map(p => {
+                    const nomor = p.match(/^\(\d+\)/)[0];
+                    const kalimat = p.replace(/^\(\d+\) /, '');
+                    return `<p class="text-sm text-gray-800 leading-relaxed mb-3"><span class="font-bold text-brand-blue mr-1">${nomor}</span>${kalimat}</p>`;
+                }).join('');
+            }).join('');
+        }
+
+        function renderPills() {
+            return SOAL.map((s, i) => {
+                const isCurrent = i === state.idx;
+                let style = "bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200";
+                if (isCurrent) {
+                    style = "bg-brand-orange text-white font-bold shadow-md scale-105";
+                } else if (sudahDijawab(s)) {
+                    style = "bg-brand-blue text-white font-semibold";
+                }
+                return `
+                    <button onclick="goToQuestion(${i})" class="w-8 h-8 shrink-0 rounded-full text-xs transition flex items-center justify-center ${style}">
+                        ${s.no}
+                    </button>
+                `;
+            }).join('');
+        }
+
+        function renderJawaban(s, ans) {
+            if (s.bentuk === 'pg') {
+                return `
+                    <div class="space-y-3">
+                        ${s.opsi.map((teks, i) => {
+                            const huruf = LETTERS[i];
+                            const terpilih = ans === huruf;
+                            return `
+                                <button onclick="pilihPG(${s.no}, '${huruf}')" class="w-full text-left p-4 rounded-xl border-2 transition flex items-start space-x-3 ${terpilih ? 'border-brand-blue bg-blue-50/50 shadow-sm' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'}">
+                                    <div class="w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs shrink-0 mt-0.5 ${terpilih ? 'bg-brand-blue text-white' : 'bg-gray-100 text-gray-600'}">
+                                        ${huruf}
+                                    </div>
+                                    <div class="text-sm text-gray-800 leading-snug pt-0.5">${teks}</div>
+                                </button>
+                            `;
+                        }).join('')}
+                    </div>
+                `;
+            }
+
+            if (s.bentuk === 'pilih') {
+                const terpilih = Array.isArray(ans) ? ans : [];
+                return `
+                    <p class="text-xs font-semibold text-brand-orange mb-3">Pilih semua jawaban yang benar. Jawaban yang salah akan mengurangi skor.</p>
+                    <div class="space-y-3">
+                        ${s.opsi.map((teks, i) => {
+                            const huruf = LETTERS[i];
+                            const dipilih = terpilih.includes(huruf);
+                            return `
+                                <button onclick="togglePilih(${s.no}, '${huruf}')" class="w-full text-left p-4 rounded-xl border-2 transition flex items-start space-x-3 ${dipilih ? 'border-brand-blue bg-blue-50/50 shadow-sm' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'}">
+                                    <i class="${dipilih ? 'fa-solid fa-square-check text-brand-blue' : 'fa-regular fa-square text-gray-400'} text-lg mt-0.5 shrink-0"></i>
+                                    <div class="text-sm text-gray-800 leading-snug">
+                                        <span class="font-bold mr-1">${huruf}.</span>${teks}
+                                    </div>
+                                </button>
+                            `;
+                        }).join('')}
+                    </div>
+                `;
+            }
+
+            if (s.bentuk === 'klasifikasi' || s.bentuk === 'bstd' || s.bentuk === 'sebab') {
+                const obj = ans || {};
+                return `
+                    <div class="overflow-x-auto border border-gray-200 rounded-xl">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="bg-gray-50 text-xs uppercase tracking-wider text-gray-500">
+                                    <th class="p-3 text-left w-12">No</th>
+                                    <th class="p-3 text-left">${s.bentuk === 'sebab' ? 'Sebab dan Akibat' : 'Pernyataan'}</th>
+                                    <th class="p-3 text-center">Jawaban</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${s.butir.map(b => `
+                                    <tr class="border-t border-gray-100 align-top">
+                                        <td class="p-3 font-bold text-gray-600">${b.k}</td>
+                                        <td class="p-3 text-gray-800 leading-snug">
+                                            ${b.sebab ? `<span class="font-semibold">Sebab:</span> ${b.sebab}<br><span class="font-semibold">Akibat:</span> ${b.akibat}` : b.t}
+                                        </td>
+                                        <td class="p-3">
+                                            <div class="flex justify-center">
+                                                <div class="inline-flex rounded-lg border border-gray-300 overflow-hidden">
+                                                    ${s.kode.map(v => `
+                                                        <button onclick="pilihButir(${s.no}, '${b.k}', '${v}')" class="px-3 py-1.5 text-xs font-bold transition ${obj[b.k] === v ? 'bg-brand-blue text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}">${v}</button>
+                                                    `).join('')}
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            }
+
+            if (s.bentuk === 'jodoh') {
+                const obj = ans || {};
+                return `
+                    <div class="space-y-4">
+                        <div>
+                            <span class="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">Daftar Pernyataan</span>
+                            <div class="space-y-2">
+                                ${s.pengertian.map(p => `
+                                    <div class="flex items-start space-x-3 p-3 rounded-xl bg-gray-50 border border-gray-100 text-sm">
+                                        <span class="font-bold text-brand-blue shrink-0">${p.k}.</span>
+                                        <span class="text-gray-800 leading-snug">${p.t}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                        <div class="overflow-x-auto border border-gray-200 rounded-xl">
+                            <table class="w-full text-sm">
+                                <thead>
+                                    <tr class="bg-gray-50 text-xs uppercase tracking-wider text-gray-500">
+                                        <th class="p-3 text-left">Pihak</th>
+                                        <th class="p-3 text-left w-40">Pilih Pernyataan</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${s.istilah.map(it => `
+                                        <tr class="border-t border-gray-100">
+                                            <td class="p-3 text-gray-800 font-semibold">${it.k}. ${it.t}</td>
+                                            <td class="p-3">
+                                                <select onchange="pilihButir(${s.no}, '${it.k}', this.value)" class="w-full p-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-brand-blue focus:border-brand-blue outline-none">
+                                                    <option value="">-- Pilih --</option>
+                                                    ${s.pengertian.map(p => `<option value="${p.k}" ${obj[it.k] === p.k ? 'selected' : ''}>${p.k}</option>`).join('')}
+                                                </select>
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+            }
+
+            if (s.bentuk === 'urut') {
+                const obj = ans || {};
+                return `
+                    <div class="space-y-4">
+                        <div>
+                            <span class="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">Daftar Peristiwa</span>
+                            <div class="space-y-2">
+                                ${s.pilihan.map(p => `
+                                    <div class="flex items-start space-x-3 p-3 rounded-xl bg-gray-50 border border-gray-100 text-sm">
+                                        <span class="font-bold text-brand-blue shrink-0">${p.k}.</span>
+                                        <span class="text-gray-800 leading-snug">${p.t}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                        <div>
+                            <span class="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">Urutan (dari yang paling awal)</span>
+                            <div class="grid grid-cols-5 gap-2">
+                                ${[1, 2, 3, 4, 5].map(pos => `
+                                    <div class="text-center">
+                                        <span class="block text-xs text-gray-500 mb-1">${pos}</span>
+                                        <select onchange="pilihButir(${s.no}, ${pos}, this.value)" class="w-full p-2 border border-gray-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-brand-blue">
+                                            <option value="">-</option>
+                                            ${s.pilihan.map(p => `<option value="${p.k}" ${obj[pos] === p.k ? 'selected' : ''}>${p.k}</option>`).join('')}
+                                        </select>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            if (s.bentuk === 'isian') {
+                const obj = ans || {};
+                return `
+                    <div class="space-y-4">
+                        ${s.items.map(it => `
+                            <div class="space-y-2">
+                                <label class="block text-xs font-bold text-gray-700">${it.k}. ${it.label}:</label>
+                                <div class="flex items-stretch border-2 border-gray-200 focus-within:border-brand-blue rounded-xl overflow-hidden transition">
+                                    <input type="text" inputmode="decimal" value="${esc(obj[it.k])}" oninput="setIsian(${s.no}, '${it.k}', this.value)" placeholder="Ketik jawaban" class="flex-1 min-w-0 p-4 text-base outline-none">
+                                    <span class="px-4 flex items-center bg-gray-50 text-sm font-bold text-gray-600 border-l border-gray-200">${it.satuan}</span>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="space-y-2">
+                    <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider">Tuliskan Jawaban Uraian Anda:</label>
+                    ${s.hint ? `<p class="text-xs font-semibold text-brand-orange">${s.hint}</p>` : ''}
+                    <textarea rows="10" oninput="setJawaban(${s.no}, this.value)" placeholder="Ketikkan penjelasan lengkap di sini..." class="w-full p-4 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-brand-blue focus:border-brand-blue outline-none custom-scrollbar">${esc(state.jawaban[s.no])}</textarea>
+                </div>
+            `;
+        }
+
+        function renderStatusKirim() {
+            if (state.statusKirim === 'berhasil') {
+                return `
+                    <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs text-emerald-800 flex items-center justify-center space-x-2">
+                        <i class="fa-solid fa-cloud-arrow-up"></i>
+                        <span>Hasil sudah tersimpan di server.</span>
+                    </div>
+                `;
+            }
+            if (state.statusKirim === 'mengirim') {
+                return `
+                    <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 flex items-center justify-center space-x-2">
+                        <i class="fa-solid fa-spinner fa-spin"></i>
+                        <span>Mengirim hasil...</span>
+                    </div>
+                `;
+            }
+            return `
+                <div class="bg-red-50 border border-red-200 rounded-xl p-4 text-xs text-red-800 space-y-3">
+                    <span class="block">Hasil belum terkirim. Periksa koneksi internet, lalu coba lagi. Jawabanmu tetap tersimpan.</span>
+                    <button onclick="kirimHasil()" class="px-4 py-2 bg-brand-blue hover:bg-blue-900 text-white font-bold rounded-lg transition">
+                        Kirim Ulang
+                    </button>
+                </div>
+            `;
+        }
+
+        function renderDone() {
+            const dijawab = SOAL.filter(sudahDijawab).length;
+            const waktuPakai = DURASI - state.sisa;
+            return `
+                <div class="bg-brand-blue text-white py-10 px-4 sm:px-6">
+                    <div class="max-w-4xl mx-auto text-center">
+                        <h1 class="text-xl sm:text-2xl font-bold mb-1">Tes Selesai</h1>
+                        <p class="text-xs text-blue-200">Tes Seleksi Olimpiade IPS SMP Muhammadiyah 9 Jakarta</p>
+                    </div>
+                </div>
+
+                <div class="max-w-xl mx-auto px-4 -mt-10 mb-12 relative z-20 w-full">
+                    <div class="bg-white rounded-2xl p-6 sm:p-8 shadow-xl border border-gray-100 text-center space-y-6">
+                        <div class="w-20 h-20 mx-auto rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center text-3xl">
+                            <i class="fa-solid fa-circle-check"></i>
+                        </div>
+
+                        <div>
+                            <h2 class="text-lg font-bold text-gray-900 mb-2">Jawaban Berhasil Dikumpulkan</h2>
+                            <p class="text-xs text-gray-500 leading-relaxed">
+                                Terima kasih telah mengerjakan tes. Jawabanmu sudah tersimpan dan akan dinilai oleh guru.
+                            </p>
+                        </div>
+
+                        ${renderStatusKirim()}
+
+                        <div class="bg-blue-50/60 rounded-xl p-4 border border-blue-100 text-left space-y-1">
+                            <span class="block text-sm font-bold text-gray-900">${esc(state.biodata.nama) || '-'}</span>
+                            <span class="block text-xs text-gray-500">Kelas ${esc(state.biodata.kelas) || '-'}</span>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3 border-t border-b border-gray-100 py-4">
+                            <div>
+                                <span class="block text-xl font-bold text-brand-blue">${dijawab} / ${SOAL.length}</span>
+                                <span class="text-xs text-gray-500 font-medium">Soal Terjawab</span>
+                            </div>
+                            <div>
+                                <span class="block text-xl font-bold text-gray-700">${formatWaktu(waktuPakai)}</span>
+                                <span class="text-xs text-gray-500 font-medium">Waktu Pengerjaan</span>
+                            </div>
+                        </div>
+
+                        <button onclick="resetTes()" class="text-xs font-semibold text-gray-500 hover:text-gray-700 flex items-center justify-center space-x-2 mx-auto transition">
+                            <i class="fa-solid fa-rotate-left"></i>
+                            <span>Atur Ulang Tes</span>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function sudahDijawab(s) {
+            const a = state.jawaban[s.no];
+            switch (s.bentuk) {
+                case 'pilih':
+                    return Array.isArray(a) && a.length > 0;
+                case 'klasifikasi':
+                case 'bstd':
+                case 'sebab':
+                    return !!a && s.butir.every(b => !!a[b.k]);
+                case 'jodoh':
+                    return !!a && s.istilah.every(it => !!a[it.k]);
+                case 'urut':
+                    return !!a && [1, 2, 3, 4, 5].every(pos => !!a[pos]);
+                case 'isian':
+                    return !!a && s.items.every(it => a[it.k] !== undefined && String(a[it.k]).trim() !== '');
+                default:
+                    return typeof a === 'string' && a.trim() !== '';
+            }
+        }
+
+        function bukaBiodata() {
+            state.screen = 'biodata';
+            render();
+        }
+
+        function kembaliDariBiodata() {
+            const nama = document.getElementById('bio-nama').value;
+            const kelas = document.getElementById('bio-kelas').value;
+            state.biodata = { nama: nama.trim(), kelas };
+            state.screen = 'welcome';
+            render();
+        }
+
+        async function sinkronSesi() {
+            const { data, error } = await db.rpc('mulai_sesi', {
+                p_nama: state.biodata.nama,
+                p_kelas: state.biodata.kelas
+            });
+            if (error) throw error;
+            if (state.kunciLokal && data.buka_no > state.bukaNoSaatKunci) {
+                state.kunciLokal = false;
+            }
+            state.sesi = data;
+            saveState();
+            return data;
+        }
+
+        async function aturStatusAwal() {
+            const s = state.sesi;
+            if (s.status === 'selesai') {
+                state.screen = 'selesai';
+            } else if (s.status === 'terkunci') {
+                state.screen = 'terkunci';
+            } else if (state.kunciLokal) {
+                state.screen = 'terkunci';
+                await catatKeServer(state.jenisKunci || 'Pelanggaran');
+            } else {
+                state.sisa = hitungSisa(s);
+                if (state.sisa <= 0) {
+                    state.screen = 'quiz';
+                    render();
+                    submitQuiz(true);
+                    return;
+                }
+                state.screen = 'quiz';
+                startTimer();
+            }
+            render();
+        }
+
+        async function simpanBiodata() {
+            const nama = document.getElementById('bio-nama').value.trim();
+            const kelas = document.getElementById('bio-kelas').value;
+
+            if (!nama) {
+                showToast('Nama lengkap wajib diisi.');
+                document.getElementById('bio-nama').focus();
+                return;
+            }
+            if (!kelas) {
+                showToast('Silakan pilih kelas terlebih dahulu.');
+                return;
+            }
+
+            state.biodata = { nama, kelas };
+            try {
+                await sinkronSesi();
+            } catch (e) {
+                console.error(e);
+                showToast('Tidak bisa terhubung ke server. Periksa koneksi internet lalu coba lagi.');
+                return;
+            }
+            await aturStatusAwal();
+        }
+
+        function pilihPG(no, huruf) {
+            if (state.submitted) return;
+            state.jawaban[no] = huruf;
+            render();
+        }
+
+        function togglePilih(no, huruf) {
+            if (state.submitted) return;
+            const daftar = Array.isArray(state.jawaban[no]) ? state.jawaban[no] : [];
+            state.jawaban[no] = daftar.includes(huruf)
+                ? daftar.filter(h => h !== huruf)
+                : [...daftar, huruf];
+            render();
+        }
+
+        function pilihButir(no, k, nilai) {
+            if (state.submitted) return;
+            state.jawaban[no] = { ...(state.jawaban[no] || {}), [k]: nilai };
+            render();
+        }
+
+        function setIsian(no, k, nilai) {
+            if (state.submitted) return;
+            state.jawaban[no] = { ...(state.jawaban[no] || {}), [k]: nilai };
+            saveState();
+            document.getElementById('nav-pills').innerHTML = renderPills();
+        }
+
+        function setJawaban(no, nilai) {
+            if (state.submitted) return;
+            state.jawaban[no] = nilai;
+            saveState();
+            document.getElementById('nav-pills').innerHTML = renderPills();
+        }
+
+        function goToQuestion(idx) {
+            state.idx = idx;
+            render();
+        }
+
+        function prevQuestion() {
+            if (state.idx > 0) {
+                state.idx--;
+                render();
+            }
+        }
+
+        function nextQuestion() {
+            if (state.idx < SOAL.length - 1) {
+                state.idx++;
+                render();
+            } else {
+                toggleModal(true);
+            }
+        }
+
+        function toggleModal(show) {
+            const modal = document.getElementById('overview-modal');
+            if (!modal) return;
+            if (show) {
+                updateModal();
+                modal.classList.remove('hidden');
+            } else {
+                modal.classList.add('hidden');
+            }
+        }
+
+        function updateModal() {
+            const dijawab = SOAL.filter(sudahDijawab).length;
+            const kosong = SOAL.length - dijawab;
+            const persen = Math.round((dijawab / SOAL.length) * 100);
+
+            document.getElementById('modal-answered-count').innerText = dijawab;
+            document.getElementById('modal-skipped-count').innerText = kosong;
+            document.getElementById('modal-progress-bar').style.width = `${persen}%`;
+
+            const warning = document.getElementById('modal-warning-banner');
+            const submitBtn = document.getElementById('modal-submit-btn');
+
+            if (kosong > 0) {
+                warning.classList.remove('hidden');
+                submitBtn.disabled = true;
+                submitBtn.className = "px-6 py-2.5 bg-gray-200 text-gray-400 text-xs font-bold rounded-xl cursor-not-allowed transition border border-gray-300 flex items-center space-x-1.5";
+                submitBtn.innerHTML = `<i class="fa-solid fa-lock text-xs"></i><span>Belum Lengkap (${kosong} Soal Kosong)</span>`;
+            } else {
+                warning.classList.add('hidden');
+                submitBtn.disabled = false;
+                submitBtn.className = "px-6 py-2.5 bg-brand-orange hover:bg-brand-orangeHover text-white text-xs font-bold rounded-xl shadow-md transition cursor-pointer";
+                submitBtn.innerHTML = `Ya, Kumpulkan Sekarang`;
+            }
+
+            document.getElementById('modal-grid').innerHTML = SOAL.map((s, i) => {
+                const isAns = sudahDijawab(s);
+                const isCurr = state.idx === i;
+                let style = "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100";
+                if (isCurr) {
+                    style = "bg-brand-orange text-white border-brand-orange font-bold shadow-md";
+                } else if (isAns) {
+                    style = "bg-brand-blue text-white border-brand-blue font-bold";
+                }
+                return `
+                    <button onclick="toggleModal(false); goToQuestion(${i});" class="py-2 rounded-xl text-xs font-bold transition border ${style}">
+                        ${s.no}
+                    </button>
+                `;
+            }).join('');
+        }
+
+        async function kirimHasil() {
+            state.statusKirim = 'mengirim';
+            render();
+
+            try {
+                const { error } = await db.rpc('kirim_hasil', {
+                    p_nama: state.biodata.nama,
+                    p_kelas: state.biodata.kelas,
+                    p_durasi: DURASI - state.sisa,
+                    p_jawaban: state.jawaban,
+                    p_sesi: state.sesi ? state.sesi.id : null
+                });
+                if (error) throw error;
+                state.statusKirim = 'berhasil';
+            } catch (e) {
+                console.error("Gagal mengirim hasil", e);
+                state.statusKirim = 'gagal';
+            }
+            render();
+        }
+
+        function submitQuiz(paksa) {
+            const kosong = SOAL.filter(s => !sudahDijawab(s)).length;
+            if (!paksa && kosong > 0) {
+                showToast(`Tidak bisa mengumpulkan! Masih ada ${kosong} soal yang belum dijawab.`);
+                return;
+            }
+
+            toggleModal(false);
+            state.submitted = true;
+            state.screen = 'done';
+            clearInterval(state.timer);
+            saveState();
+            kirimHasil();
+        }
+
+        function resetTes() {
+            if (!confirm('Hapus semua jawaban dan atur ulang tes?')) return;
+            localStorage.removeItem(STORAGE_KEY);
+            clearInterval(state.timer);
+            state = {
+                screen: 'welcome',
+                idx: 0,
+                jawaban: {},
+                biodata: { nama: '', kelas: '' },
+                pelanggaran: [],
+                sesi: null,
+                kunciLokal: false,
+                bukaNoSaatKunci: 0,
+                jenisKunci: '',
+                pesanKunci: '',
+                submitted: false,
+                statusKirim: null,
+                sisa: DURASI,
+                timer: null
+            };
+            render();
+        }
+
+        function showToast(msg) {
+            const toast = document.createElement('div');
+            toast.className = 'fixed bottom-20 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs px-4 py-2.5 rounded-xl shadow-xl z-50 flex items-center space-x-2';
+            toast.innerHTML = `<i class="fa-solid fa-circle-info text-orange-300"></i><span>${msg}</span>`;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 2500);
+        }
+
+        function showPeringatan(msg) {
+            const toast = document.createElement('div');
+            toast.className = 'fixed top-4 left-1/2 transform -translate-x-1/2 bg-red-600 text-white text-xs sm:text-sm px-5 py-3 rounded-xl shadow-xl z-[60] flex items-center space-x-2 max-w-md';
+            toast.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i><span>${msg}</span>`;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 4000);
+        }
+
+        async function catatKeServer(jenis) {
+            if (!state.sesi) return false;
+            const { data, error } = await db.rpc('catat_pelanggaran', {
+                p_sesi: state.sesi.id,
+                p_jenis: jenis,
+                p_soal: SOAL[state.idx].no
+            });
+            if (error) {
+                console.error(error);
+                return false;
+            }
+            state.sesi.status = data.status;
+            saveState();
+            return true;
+        }
+
+        let terakhirCatat = 0;
+
+        async function catatPelanggaran(jenis) {
+            if (state.screen !== 'quiz' || state.submitted) return;
+            const sekarang = Date.now();
+            if (sekarang - terakhirCatat < 1500) return;
+            terakhirCatat = sekarang;
+
+            state.pelanggaran.push({
+                waktu: new Date().toISOString(),
+                jenis: jenis,
+                soal: SOAL[state.idx].no
+            });
+            state.kunciLokal = true;
+            state.jenisKunci = jenis;
+            state.bukaNoSaatKunci = state.sesi ? (state.sesi.buka_no || 0) : 0;
+            state.screen = 'terkunci';
+            state.pesanKunci = '';
+            clearInterval(state.timer);
+            saveState();
+            render();
+            showPeringatan(`${jenis}. Tes dikunci.`);
+
+            const ok = await catatKeServer(jenis);
+            if (!ok) {
+                state.pesanKunci = 'Koneksi ke server bermasalah. Kunci tetap berlaku dan pelanggaran akan dicatat ulang saat halaman dibuka kembali.';
+                render();
+            }
+        }
+
+        async function bukaDenganKode(kode) {
+            state.pesanKunci = 'Memeriksa kode...';
+            render();
+            try {
+                const { data, error } = await db.rpc('buka_kunci', {
+                    p_sesi: state.sesi.id,
+                    p_kode: kode
+                });
+                if (error) throw error;
+                if (data !== 'ok') {
+                    const pesan = {
+                        salah: 'Kode salah. Periksa kembali kode dari pengawas.',
+                        habis: 'Kode tidak berlaku lagi. Minta kode baru kepada pengawas.',
+                        tidak_terkunci: 'Tes ini tidak sedang dikunci. Muat ulang halaman.'
+                    };
+                    state.pesanKunci = pesan[data] || 'Kode tidak berlaku.';
+                    render();
+                    return;
+                }
+                state.kunciLokal = false;
+                await sinkronSesi();
+                state.pesanKunci = '';
+                await aturStatusAwal();
+            } catch (e) {
+                console.error(e);
+                state.pesanKunci = 'Gagal terhubung ke server. Coba lagi.';
+                render();
+            }
+        }
+
+        function pasangPengawasan() {
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden) catatPelanggaran('Pindah ke tab atau aplikasi lain');
+            });
+            window.addEventListener('blur', () => catatPelanggaran('Keluar dari halaman tes'));
+            document.addEventListener('copy', e => { e.preventDefault(); catatPelanggaran('Menyalin teks'); });
+            document.addEventListener('cut', e => { e.preventDefault(); catatPelanggaran('Memotong teks'); });
+            document.addEventListener('paste', e => { e.preventDefault(); catatPelanggaran('Menempel teks'); });
+            document.addEventListener('contextmenu', e => e.preventDefault());
+            document.addEventListener('keydown', e => {
+                if (e.key === 'PrintScreen') catatPelanggaran('Menekan tombol PrintScreen');
+                if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'p') e.preventDefault();
+            });
+        }
+
+        window.onload = async function () {
+            loadState();
+            pasangPengawasan();
+            render();
+
+            const perluSinkron = state.sesi && state.biodata.nama && ['quiz', 'terkunci'].includes(state.screen);
+            if (perluSinkron) {
+                try {
+                    await sinkronSesi();
+                    await aturStatusAwal();
+                } catch (e) {
+                    console.error(e);
+                    if (state.screen === 'quiz') startTimer();
+                }
+            }
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Review Hasil - Tes Seleksi Olimpiade IPS SMP Muhammadiyah 9 Jakarta</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: { blue: '#13378b', orange: '#f06400', orangeHover: '#d95a00' }
+                    },
+                    fontFamily: { sans: ['Inter', 'sans-serif'] }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f4f6f9; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    </style>
+</head>
+<body class="min-h-screen text-gray-800 antialiased">
+    <div id="app"></div>
+
+    <script>
+        const SUPABASE_URL = 'https://xttdscfvldwrznmemlzl.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_cH5t6-wU6qCKkvuqnWQeKw_-fGFITUT';
+        const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        const NOMOR = Array.from({ length: 20 }, (_, i) => i + 1);
+        const URAIAN = [4, 8, 12, 16, 20];
+        const STATUS_LABEL = {
+            benar: { teks: 'Benar', cls: 'bg-emerald-100 text-emerald-700' },
+            sebagian: { teks: 'Sebagian', cls: 'bg-amber-100 text-amber-700' },
+            salah: { teks: 'Salah', cls: 'bg-red-100 text-red-700' },
+            kosong: { teks: 'Kosong', cls: 'bg-gray-100 text-gray-600' }
+        };
+        const SESI_LABEL = {
+            aktif: { teks: 'Aktif', cls: 'bg-blue-100 text-blue-700' },
+            terkunci: { teks: 'Terkunci', cls: 'bg-red-100 text-red-700' },
+            selesai: { teks: 'Selesai', cls: 'bg-emerald-100 text-emerald-700' }
+        };
+
+        let st = {
+            masuk: false,
+            memuat: false,
+            pesanLogin: '',
+            pesanAksi: '',
+            kunci: {},
+            murid: [],
+            aktif: null,
+            draft: {},
+            cari: '',
+            urut: 'nama',
+            kelas: ''
+        };
+
+        function esc(s) {
+            return String(s ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function formatDurasi(detik) {
+            if (typeof detik !== 'number') return '';
+            return Math.floor(detik / 60) + ' mnt ' + (detik % 60) + ' dtk';
+        }
+
+        function tampilJawaban(a) {
+            if (a === undefined || a === null || a === '') return '';
+            if (Array.isArray(a)) return a.join(', ');
+            if (typeof a === 'object') return Object.entries(a).map(([k, v]) => k + '=' + v).join('; ');
+            return String(a);
+        }
+
+        function formatWaktu(iso) {
+            const d = new Date(iso);
+            return isNaN(d) ? iso : d.toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
+        }
+
+        function uraianLengkap(m) {
+            return m.sudahKumpul && URAIAN.every(n => m.uraian[n] !== null && m.uraian[n] !== undefined);
+        }
+
+        function totalSkor(m) {
+            return Number(m.skorObjektif) + URAIAN.reduce((s, n) => s + (Number(m.uraian[n]) || 0), 0);
+        }
+
+        function petakanSesi(s) {
+            const daftarHasil = Array.isArray(s.hasil) ? s.hasil : [];
+            const h = daftarHasil.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0] || null;
+            const detail = h && h.detail ? h.detail : {};
+            const jawaban = h && h.jawaban ? h.jawaban : {};
+            const status = {};
+            const poin = {};
+            const jawabanTeks = {};
+            NOMOR.forEach(n => {
+                status[n] = detail[n] ? detail[n].status : null;
+                poin[n] = detail[n] ? Number(detail[n].poin) : undefined;
+                jawabanTeks[n] = tampilJawaban(jawaban[n]);
+            });
+            return {
+                sesiId: s.id,
+                nama: s.nama,
+                kelas: s.kelas,
+                statusSesi: s.status,
+                kodeBuka: s.kode_buka,
+                pelanggaran: Array.isArray(s.pelanggaran) ? s.pelanggaran : [],
+                sudahKumpul: !!h,
+                hasilId: h ? h.id : null,
+                waktu: h ? h.created_at : s.mulai,
+                durasi: h ? formatDurasi(h.durasi_detik) : '',
+                skorObjektif: h ? Number(h.skor_objektif) : 0,
+                uraian: h
+                    ? { 4: h.uraian_4, 8: h.uraian_8, 12: h.uraian_12, 16: h.uraian_16, 20: h.uraian_20 }
+                    : { 4: null, 8: null, 12: null, 16: null, 20: null },
+                status,
+                poin,
+                jawabanTeks
+            };
+        }
+
+        async function loginGuru(email, password) {
+            st.memuat = true;
+            st.pesanLogin = '';
+            render();
+            const { error } = await db.auth.signInWithPassword({ email, password });
+            st.memuat = false;
+            if (error) {
+                st.pesanLogin = 'Email atau kata sandi salah.';
+                render();
+                return;
+            }
+            await muatData();
+        }
+
+        async function muatData() {
+            st.memuat = true;
+            render();
+            const [kunciRes, sesiRes] = await Promise.all([
+                db.from('kunci').select('*').order('no'),
+                db.from('sesi').select('*, hasil(*)').order('dibuat')
+            ]);
+            st.memuat = false;
+
+            if (kunciRes.error || sesiRes.error) {
+                st.pesanLogin = 'Gagal memuat data. Pastikan Anda sudah login sebagai guru.';
+                st.masuk = false;
+                await db.auth.signOut();
+                render();
+                return;
+            }
+
+            st.kunci = {};
+            kunciRes.data.forEach(k => {
+                st.kunci[k.no] = { bentuk: k.bentuk, teks: k.teks, maks: k.skor, poin: k.poin_kunci || '' };
+            });
+            st.murid = sesiRes.data.map(petakanSesi);
+            st.masuk = true;
+            render();
+        }
+
+        async function keluar() {
+            await db.auth.signOut();
+            st = { ...st, masuk: false, murid: [], kunci: {}, aktif: null, draft: {}, pesanAksi: '' };
+            render();
+        }
+
+        function render() {
+            document.getElementById('app').innerHTML = st.masuk ? renderDashboard() : renderLogin();
+        }
+
+        function renderLogin() {
+            return `
+                <div class="min-h-screen flex items-center justify-center p-4">
+                    <div class="bg-white rounded-2xl shadow-xl border border-gray-100 p-8 w-full max-w-sm space-y-6">
+                        <div class="text-center space-y-2">
+                            <div class="w-14 h-14 mx-auto rounded-2xl bg-blue-50 text-brand-blue flex items-center justify-center text-2xl">
+                                <i class="fa-solid fa-user-lock"></i>
+                            </div>
+                            <h1 class="text-lg font-bold text-gray-900">Review Hasil Tes</h1>
+                            <p class="text-xs text-gray-500">Khusus guru. Masuk dengan akun guru.</p>
+                        </div>
+                        <form onsubmit="event.preventDefault(); loginGuru(this.email.value.trim(), this.pw.value);" class="space-y-4">
+                            <input name="email" type="email" required placeholder="Email" class="w-full p-3 border-2 border-gray-200 focus:border-brand-blue rounded-xl text-sm outline-none transition">
+                            <input name="pw" type="password" required placeholder="Kata sandi" class="w-full p-3 border-2 border-gray-200 focus:border-brand-blue rounded-xl text-sm outline-none transition">
+                            ${st.pesanLogin ? `<p class="text-xs text-red-600">${esc(st.pesanLogin)}</p>` : ''}
+                            <button type="submit" ${st.memuat ? 'disabled' : ''} class="w-full py-3 bg-brand-orange hover:bg-brand-orangeHover disabled:opacity-60 text-white font-bold rounded-xl transition text-sm">
+                                ${st.memuat ? 'Memuat...' : 'Masuk'}
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderDashboard() {
+            const sudahKumpul = st.murid.filter(m => m.sudahKumpul);
+            const belumDinilai = sudahKumpul.filter(m => !uraianLengkap(m)).length;
+            const terkunci = st.murid.filter(m => m.statusSesi === 'terkunci').length;
+            const rata = sudahKumpul.length
+                ? (sudahKumpul.reduce((s, m) => s + totalSkor(m), 0) / sudahKumpul.length).toFixed(1)
+                : '-';
+            const daftarKelas = [...new Set(st.murid.map(m => m.kelas))].sort();
+
+            return `
+                <div class="bg-brand-blue text-white py-3 px-4 sm:px-6 shadow-md">
+                    <div class="max-w-7xl mx-auto flex items-center justify-between">
+                        <div class="flex items-center space-x-2">
+                            <i class="fa-solid fa-clipboard-check text-orange-400"></i>
+                            <h1 class="text-sm sm:text-base font-semibold">Review Hasil - Tes Seleksi Olimpiade IPS SMP Muhammadiyah 9 Jakarta</h1>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <button onclick="muatData()" class="bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-xl text-xs font-semibold transition">
+                                <i class="fa-solid fa-rotate"></i> Muat Ulang
+                            </button>
+                            <button onclick="keluar()" class="bg-white text-brand-blue hover:bg-blue-50 px-3 py-1.5 rounded-xl text-xs font-bold transition">
+                                Keluar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="max-w-7xl mx-auto w-full px-4 sm:px-6 py-6 space-y-6">
+                    <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                        <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-200">
+                            <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Peserta</span>
+                            <span class="block text-2xl font-extrabold text-brand-blue">${st.murid.length}</span>
+                        </div>
+                        <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-200">
+                            <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Sedang Terkunci</span>
+                            <span class="block text-2xl font-extrabold text-red-600">${terkunci}</span>
+                        </div>
+                        <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-200">
+                            <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Belum Dinilai Uraian</span>
+                            <span class="block text-2xl font-extrabold text-amber-600">${belumDinilai}</span>
+                        </div>
+                        <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-200">
+                            <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Rata-rata Nilai</span>
+                            <span class="block text-2xl font-extrabold text-gray-900">${rata}</span>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                        <section class="lg:col-span-4 bg-white rounded-2xl shadow-sm border border-gray-200 flex flex-col">
+                            <div class="p-4 border-b border-gray-100 space-y-3">
+                                <input type="text" value="${esc(st.cari)}" oninput="setFilter('cari', this.value)" placeholder="Cari nama..." class="w-full p-2.5 border border-gray-300 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-blue">
+                                <div class="grid grid-cols-2 gap-2">
+                                    <select onchange="setFilter('kelas', this.value)" class="p-2 border border-gray-300 rounded-xl text-xs bg-white outline-none">
+                                        <option value="">Semua kelas</option>
+                                        ${daftarKelas.map(k => `<option value="${esc(k)}" ${st.kelas === k ? 'selected' : ''}>${esc(k)}</option>`).join('')}
+                                    </select>
+                                    <select onchange="setFilter('urut', this.value)" class="p-2 border border-gray-300 rounded-xl text-xs bg-white outline-none">
+                                        <option value="nama" ${st.urut === 'nama' ? 'selected' : ''}>Urut nama</option>
+                                        <option value="nilai" ${st.urut === 'nilai' ? 'selected' : ''}>Nilai tertinggi</option>
+                                        <option value="kelas" ${st.urut === 'kelas' ? 'selected' : ''}>Urut kelas</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div id="daftar" class="p-2 overflow-y-auto custom-scrollbar max-h-[70vh]">
+                                ${renderDaftar()}
+                            </div>
+                        </section>
+
+                        <section id="detail" class="lg:col-span-8">
+                            ${renderDetail()}
+                        </section>
+                    </div>
+                </div>
+            `;
+        }
+
+        function daftarTampil() {
+            let list = st.murid.filter(m =>
+                (!st.kelas || m.kelas === st.kelas) &&
+                (!st.cari || m.nama.toLowerCase().includes(st.cari.toLowerCase()))
+            );
+            if (st.urut === 'nilai') list.sort((a, b) => totalSkor(b) - totalSkor(a));
+            else if (st.urut === 'kelas') list.sort((a, b) => a.kelas.localeCompare(b.kelas) || a.nama.localeCompare(b.nama));
+            else list.sort((a, b) => a.nama.localeCompare(b.nama));
+            return list;
+        }
+
+        function renderDaftar() {
+            const list = daftarTampil();
+            if (!list.length) {
+                return `<p class="p-4 text-xs text-gray-500 text-center">Belum ada data yang cocok.</p>`;
+            }
+            return list.map(m => {
+                const aktif = st.aktif === m.sesiId;
+                const sesiLabel = SESI_LABEL[m.statusSesi] || SESI_LABEL.aktif;
+                return `
+                    <button onclick="pilihMurid('${m.sesiId}')" class="w-full text-left p-3 rounded-xl mb-1 transition border ${aktif ? 'border-brand-blue bg-blue-50/60' : 'border-transparent hover:bg-gray-50'}">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-sm font-semibold text-gray-900 truncate">${esc(m.nama)}</span>
+                            <span class="text-xs font-bold text-brand-blue shrink-0">${m.sudahKumpul ? totalSkor(m) : '-'}</span>
+                        </div>
+                        <div class="flex items-center justify-between mt-1 gap-2">
+                            <span class="text-xs text-gray-500 truncate">Kelas ${esc(m.kelas)}</span>
+                            <span class="flex gap-1 shrink-0">
+                                <span class="text-[10px] font-bold uppercase px-2 py-0.5 rounded ${sesiLabel.cls}">${sesiLabel.teks}</span>
+                                ${m.pelanggaran.length ? `<span class="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-red-50 text-red-700">Pelanggaran ${m.pelanggaran.length}</span>` : ''}
+                                ${m.sudahKumpul && !uraianLengkap(m) ? '<span class="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-amber-100 text-amber-700">Belum dinilai</span>' : ''}
+                            </span>
+                        </div>
+                    </button>
+                `;
+            }).join('');
+        }
+
+        function renderPanelKunci(m) {
+            const sesiLabel = SESI_LABEL[m.statusSesi] || SESI_LABEL.aktif;
+            let tombol = '';
+            if (m.statusSesi === 'terkunci') {
+                tombol = `
+                    <div class="flex flex-wrap gap-2">
+                        <button onclick="buatKode('${m.sesiId}')" class="px-4 py-2 bg-brand-blue hover:bg-blue-900 text-white text-xs font-bold rounded-xl transition">
+                            <i class="fa-solid fa-key"></i> Buat Kode Buka
+                        </button>
+                        <button onclick="bukaPaksa('${m.sesiId}')" class="px-4 py-2 border border-gray-300 hover:bg-gray-50 text-gray-700 text-xs font-bold rounded-xl transition">
+                            Buka Paksa Tanpa Kode
+                        </button>
+                    </div>
+                `;
+            } else if (m.statusSesi === 'selesai') {
+                tombol = `
+                    <button onclick="izinkanUlang('${m.sesiId}')" class="px-4 py-2 border border-gray-300 hover:bg-gray-50 text-gray-700 text-xs font-bold rounded-xl transition">
+                        <i class="fa-solid fa-rotate-left"></i> Izinkan Ulang
+                    </button>
+                `;
+            }
+
+            return `
+                <div class="border border-gray-200 rounded-xl p-4 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Status Tes</span>
+                        <span class="text-xs font-bold px-2.5 py-1 rounded-lg ${sesiLabel.cls}">${sesiLabel.teks}</span>
+                    </div>
+                    ${m.statusSesi === 'terkunci' && m.kodeBuka ? `
+                        <div class="bg-blue-50 border border-blue-100 rounded-xl p-3 text-center">
+                            <span class="block text-xs text-gray-500">Kode buka aktif (berikan ke murid)</span>
+                            <span class="block text-2xl font-extrabold tracking-widest text-brand-blue">${esc(m.kodeBuka)}</span>
+                        </div>
+                    ` : ''}
+                    ${tombol}
+                    ${m.pelanggaran.length ? `
+                        <div>
+                            <span class="block text-xs font-bold text-gray-600 mb-1">Catatan Pelanggaran (${m.pelanggaran.length})</span>
+                            <ul class="space-y-1 bg-red-50 border border-red-100 rounded-xl p-3 text-xs text-red-800">
+                                ${m.pelanggaran.map((p, i) => `<li>${i + 1}. ${esc(p.jenis)}, pada soal ${esc(p.soal)} (${esc(formatWaktu(p.waktu))})</li>`).join('')}
+                            </ul>
+                        </div>
+                    ` : '<p class="text-xs text-gray-500">Tidak ada pelanggaran tercatat.</p>'}
+                </div>
+            `;
+        }
+
+        function renderDetail() {
+            const m = st.murid.find(x => x.sesiId === st.aktif);
+            if (!m) {
+                return `
+                    <div class="bg-white rounded-2xl shadow-sm border border-dashed border-gray-300 p-12 text-center text-sm text-gray-500">
+                        <i class="fa-solid fa-hand-pointer text-2xl text-gray-300 mb-3 block"></i>
+                        Pilih murid dari daftar untuk melihat jawabannya.
+                    </div>
+                `;
+            }
+
+            const aksi = st.pesanAksi ? `<div class="p-3 rounded-xl text-xs bg-blue-50 text-brand-blue border border-blue-100">${esc(st.pesanAksi)}</div>` : '';
+
+            if (!m.sudahKumpul) {
+                return `
+                    <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 space-y-6">
+                        <div>
+                            <h2 class="text-lg font-bold text-gray-900">${esc(m.nama)}</h2>
+                            <p class="text-xs text-gray-500">Kelas ${esc(m.kelas)} · Mulai ${esc(formatWaktu(m.waktu))}</p>
+                        </div>
+                        ${aksi}
+                        ${renderPanelKunci(m)}
+                        <p class="text-xs text-gray-500">Murid ini belum mengumpulkan jawaban.</p>
+                    </div>
+                `;
+            }
+
+            const objektifNomor = NOMOR.filter(n => !URAIAN.includes(n));
+            const uraianTerisi = URAIAN.filter(n => m.uraian[n] !== null && m.uraian[n] !== undefined).length;
+
+            return `
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 space-y-6">
+                    <div class="flex flex-wrap items-start justify-between gap-4">
+                        <div>
+                            <h2 class="text-lg font-bold text-gray-900">${esc(m.nama)}</h2>
+                            <p class="text-xs text-gray-500">Kelas ${esc(m.kelas)} · Dikumpulkan ${esc(formatWaktu(m.waktu))} · Durasi ${esc(m.durasi)}</p>
+                        </div>
+                        <div class="text-right">
+                            <span class="block text-xs text-gray-500 uppercase tracking-wider">Total Skor</span>
+                            <span class="text-3xl font-extrabold text-brand-blue">${totalSkor(m)}</span>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-3 text-center">
+                        <div class="bg-gray-50 rounded-xl p-3">
+                            <span class="block text-lg font-bold text-gray-900">${m.skorObjektif} / 75</span>
+                            <span class="text-xs text-gray-500">Skor Objektif</span>
+                        </div>
+                        <div class="bg-gray-50 rounded-xl p-3">
+                            <span class="block text-lg font-bold text-gray-900">${uraianTerisi} / 5</span>
+                            <span class="text-xs text-gray-500">Uraian Dinilai</span>
+                        </div>
+                        <div class="bg-gray-50 rounded-xl p-3">
+                            <span class="block text-lg font-bold text-gray-900">${totalSkor(m)} / 100</span>
+                            <span class="text-xs text-gray-500">Total Skor</span>
+                        </div>
+                    </div>
+
+                    ${aksi}
+
+                    ${renderPanelKunci(m)}
+
+                    <div>
+                        <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Soal Objektif</h3>
+                        <div class="overflow-x-auto border border-gray-200 rounded-xl">
+                            <table class="w-full text-xs">
+                                <thead>
+                                    <tr class="bg-gray-50 text-gray-500 uppercase tracking-wider">
+                                        <th class="p-2.5 text-left w-10">No</th>
+                                        <th class="p-2.5 text-left">Bentuk</th>
+                                        <th class="p-2.5 text-left">Jawaban Murid</th>
+                                        <th class="p-2.5 text-left">Kunci</th>
+                                        <th class="p-2.5 text-center">Poin</th>
+                                        <th class="p-2.5 text-center">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${objektifNomor.map(n => {
+                                        const k = st.kunci[n];
+                                        const s = m.status[n];
+                                        const label = s ? STATUS_LABEL[s] : { teks: '-', cls: 'bg-gray-100 text-gray-500' };
+                                        const jawab = m.jawabanTeks[n];
+                                        return `
+                                            <tr class="border-t border-gray-100 align-top">
+                                                <td class="p-2.5 font-bold">${n}</td>
+                                                <td class="p-2.5 text-gray-600">${esc(k.bentuk)}</td>
+                                                <td class="p-2.5 text-gray-800">${jawab ? esc(jawab) : '<span class="text-gray-400">(kosong)</span>'}</td>
+                                                <td class="p-2.5 text-gray-800 font-semibold">${esc(k.teks)}</td>
+                                                <td class="p-2.5 text-center font-bold">${m.poin[n] !== undefined ? m.poin[n] : '-'} / ${k.maks}</td>
+                                                <td class="p-2.5 text-center"><span class="px-2 py-0.5 rounded-md font-bold ${label.cls}">${label.teks}</span></td>
+                                            </tr>
+                                        `;
+                                    }).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div>
+                        <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Soal Uraian</h3>
+                        <div class="space-y-4">
+                            ${URAIAN.map(n => {
+                                const k = st.kunci[n];
+                                const jawab = m.jawabanTeks[n];
+                                const sekarang = st.draft[n] !== undefined ? st.draft[n] : m.uraian[n];
+                                return `
+                                    <div class="border border-gray-200 rounded-xl p-4 space-y-3">
+                                        <div class="flex items-center justify-between">
+                                            <span class="text-sm font-bold text-gray-900">Soal ${n}</span>
+                                            <span class="text-xs text-gray-500">Maks 5</span>
+                                        </div>
+                                        <div class="text-sm text-gray-800 bg-gray-50 p-3 rounded-lg whitespace-pre-line leading-relaxed">${jawab ? esc(jawab) : '<span class="text-gray-400">(kosong)</span>'}</div>
+                                        <details class="text-xs text-gray-600">
+                                            <summary class="cursor-pointer font-semibold text-brand-blue">Lihat poin kunci</summary>
+                                            <p class="mt-2 leading-relaxed">${esc(k.poin)}</p>
+                                        </details>
+                                        <div class="flex items-center gap-3">
+                                            <label class="text-xs font-bold text-gray-700">Nilai (0-5):</label>
+                                            <select onchange="ubahDraft(${n}, this.value)" class="p-2 border border-gray-300 rounded-lg text-sm bg-white outline-none">
+                                                <option value="">-</option>
+                                                ${[0, 1, 2, 3, 4, 5].map(v => `<option value="${v}" ${sekarang !== null && sekarang !== undefined && String(sekarang) === String(v) ? 'selected' : ''}>${v}</option>`).join('')}
+                                            </select>
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                        <button onclick="simpanNilai()" class="mt-4 w-full py-3 bg-brand-orange hover:bg-brand-orangeHover text-white font-bold rounded-xl transition text-sm">
+                            Simpan Nilai Uraian
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function setFilter(kunci, nilai) {
+            st[kunci] = nilai;
+            document.getElementById('daftar').innerHTML = renderDaftar();
+        }
+
+        function pilihMurid(sesiId) {
+            st.aktif = sesiId;
+            st.draft = {};
+            st.pesanAksi = '';
+            render();
+        }
+
+        function ubahDraft(n, v) {
+            st.draft[n] = v;
+        }
+
+        async function buatKode(sesiId) {
+            const { data, error } = await db.rpc('buat_kode_buka', { p_sesi: sesiId });
+            if (error) {
+                st.pesanAksi = 'Gagal membuat kode: ' + error.message;
+            } else {
+                st.pesanAksi = `Kode buka baru: ${data}. Berikan kode ini kepada murid. Kode hanya berlaku 5 kali percobaan.`;
+            }
+            await muatData();
+            st.pesanAksi = error ? st.pesanAksi : `Kode buka baru: ${data}. Berikan kode ini kepada murid. Kode berlaku sampai 5 kali percobaan salah.`;
+            render();
+        }
+
+        async function bukaPaksa(sesiId) {
+            if (!confirm('Buka tes tanpa kode? Murid akan langsung bisa melanjutkan tes.')) return;
+            const { error } = await db.rpc('buka_paksa', { p_sesi: sesiId });
+            st.pesanAksi = error ? 'Gagal membuka tes: ' + error.message : 'Tes dibuka. Minta murid memuat ulang halaman.';
+            await muatData();
+            st.pesanAksi = error ? st.pesanAksi : 'Tes dibuka. Minta murid memuat ulang halaman.';
+            render();
+        }
+
+        async function izinkanUlang(sesiId) {
+            if (!confirm('Izinkan murid mengerjakan ulang tes dari awal?')) return;
+            const { error } = await db.rpc('izinkan_ulang', { p_sesi: sesiId });
+            st.pesanAksi = error ? 'Gagal: ' + error.message : 'Murid dapat mengerjakan ulang. Minta murid memuat ulang halaman dan memasukkan biodata yang sama.';
+            await muatData();
+            st.pesanAksi = error ? st.pesanAksi : 'Murid dapat mengerjakan ulang. Minta murid memuat ulang halaman dan memasukkan biodata yang sama.';
+            render();
+        }
+
+        async function simpanNilai() {
+            const m = st.murid.find(x => x.sesiId === st.aktif);
+            if (!m || !m.sudahKumpul) return;
+
+            const nilai = {};
+            URAIAN.forEach(n => {
+                const v = st.draft[n] !== undefined ? st.draft[n] : m.uraian[n];
+                nilai[n] = v === '' || v === null || v === undefined ? null : Number(v);
+            });
+
+            st.pesanAksi = 'Menyimpan nilai...';
+            render();
+
+            const { error } = await db.from('hasil').update({
+                uraian_4: nilai[4],
+                uraian_8: nilai[8],
+                uraian_12: nilai[12],
+                uraian_16: nilai[16],
+                uraian_20: nilai[20]
+            }).eq('id', m.hasilId);
+
+            if (error) {
+                st.pesanAksi = 'Gagal menyimpan: ' + error.message;
+                render();
+                return;
+            }
+            st.draft = {};
+            await muatData();
+            st.pesanAksi = 'Nilai uraian berhasil disimpan.';
+            render();
+        }
+
+        async function init() {
+            const { data } = await db.auth.getSession();
+            if (data.session) {
+                await muatData();
+            } else {
+                render();
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>
