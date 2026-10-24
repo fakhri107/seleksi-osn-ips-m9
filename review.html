@@ -126,7 +126,9 @@
                     : { 4: null, 8: null, 12: null, 16: null, 20: null },
                 status,
                 poin,
-                jawabanTeks
+                jawabanTeks,
+                jawabanMentah: jawaban,
+                penyesuaian: h && h.penyesuaian ? h.penyesuaian : {}
             };
         }
 
@@ -163,7 +165,7 @@
 
             st.kunci = {};
             kunciRes.data.forEach(k => {
-                st.kunci[k.no] = { bentuk: k.bentuk, teks: k.teks, maks: k.skor, poin: k.poin_kunci || '' };
+                st.kunci[k.no] = { bentuk: k.bentuk, teks: k.teks, maks: k.skor, poin: k.poin_kunci || '', tipe: k.tipe, jawabanBenar: k.jawaban_benar, skor: k.skor };
             });
             st.murid = sesiRes.data.map(petakanSesi);
             st.masuk = true;
@@ -365,6 +367,70 @@
             `;
         }
 
+        function nilaiIsianOtomatis(k, jawabanMurid, item, maksItem) {
+            let s = String(jawabanMurid ?? '').replace(/[^0-9.,]/g, '');
+            s = k.tipe === 'isian_bulat' ? s.replace(/[.,]/g, '') : s.replace(',', '.');
+            if (!/^[0-9]+(\.[0-9]+)?$/.test(s)) return 0;
+            return Math.abs(parseFloat(s) - Number(k.jawabanBenar[item])) < 0.001 ? maksItem : 0;
+        }
+
+        function renderPenyesuaianIsian(m) {
+            const soal = NOMOR.filter(n => st.kunci[n] && (st.kunci[n].tipe === 'isian_bulat' || st.kunci[n].tipe === 'isian_desimal'));
+            if (!soal.length) return '';
+            return `
+                <div>
+                    <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Penyesuaian Nilai Isian</h3>
+                    <div class="space-y-3">
+                        ${soal.map(n => {
+                            const k = st.kunci[n];
+                            const items = Object.keys(k.jawabanBenar);
+                            const maksItem = k.skor / items.length;
+                            const opsi = [...Array(Math.floor(maksItem) + 1).keys()];
+                            return `
+                                <div class="border border-gray-200 rounded-xl p-4 space-y-2">
+                                    <span class="text-sm font-bold text-gray-900">Soal ${n} (maks ${maksItem} per isian)</span>
+                                    ${items.map(item => {
+                                        const jawabMurid = m.jawabanMentah && m.jawabanMentah[n] ? m.jawabanMentah[n][item] : undefined;
+                                        const auto = nilaiIsianOtomatis(k, jawabMurid, item, maksItem);
+                                        const override = m.penyesuaian && m.penyesuaian[n] ? m.penyesuaian[n][item] : undefined;
+                                        const nilai = override !== undefined ? Number(override) : auto;
+                                        return `
+                                            <div class="flex flex-wrap items-center gap-3 text-xs">
+                                                <span class="font-bold">${item}.</span>
+                                                <span class="flex-1 min-w-[140px]">Jawaban: <strong>${jawabMurid !== undefined && jawabMurid !== '' ? esc(jawabMurid) : '(kosong)'}</strong></span>
+                                                <span>Kunci: <strong>${esc(k.jawabanBenar[item])}</strong></span>
+                                                <select onchange="ubahIsian('${m.hasilId}', ${n}, '${item}', this.value)" class="p-1.5 border border-gray-300 rounded-lg bg-white">
+                                                    ${opsi.map(v => `<option value="${v}" ${nilai === v ? 'selected' : ''}>${v}</option>`).join('')}
+                                                </select>
+                                                ${override !== undefined ? '<span class="text-[10px] font-bold uppercase text-amber-700">diubah manual</span>' : ''}
+                                            </div>
+                                        `;
+                                    }).join('')}
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        async function ubahIsian(hasilId, no, item, nilai) {
+            const { error } = await db.rpc('ubah_skor_isian', {
+                p_hasil: hasilId,
+                p_no: no,
+                p_item: item,
+                p_poin: Number(nilai)
+            });
+            if (error) {
+                st.pesanAksi = 'Gagal menyimpan nilai isian: ' + error.message;
+                render();
+                return;
+            }
+            await muatData();
+            st.pesanAksi = `Nilai isian soal ${no} (${item}) disimpan.`;
+            render();
+        }
+
         function renderDetail() {
             const m = st.murid.find(x => x.sesiId === st.aktif);
             if (!m) {
@@ -462,6 +528,8 @@
                             </table>
                         </div>
                     </div>
+
+                    ${renderPenyesuaianIsian(m)}
 
                     <div>
                         <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Soal Uraian</h3>
